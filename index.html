@@ -1,0 +1,2403 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    <title>睡眠・体調記録アプリ</title>
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+    
+    <!-- iOS support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="睡眠記録" />
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
+    <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
+
+    <!-- Google Fonts & Tailwind CDN -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Firebase Compat SDK for Google Drive Backup -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+    <!-- Tailwind Config and Global Styles -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            screens: {
+              'xs': '400px'
+            },
+            fontFamily: {
+              sans: ['"Noto Sans JP"', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+              mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace']
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+      body {
+        font-family: "Noto Sans JP", "Inter", sans-serif;
+        overflow-x: hidden;
+        overscroll-behavior-y: contain;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.05);
+        border-radius: 9999px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #94a3b8;
+        border: 2px solid transparent;
+        border-radius: 9999px;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-900 md:bg-slate-950 antialiased overflow-hidden selection:bg-blue-500/30">
+    <div id="root" class="min-h-screen md:py-4 flex justify-center items-center overflow-y-auto">
+      
+      <!-- Device Wrapper -->
+      <div id="device-mockup" class="w-full max-w-[485px] md:max-w-[768px] lg:max-w-[1012px] xl:max-w-[1180px] h-[100dvh] md:h-[94vh] md:max-h-[880px] flex flex-col md:rounded-[36px] shadow-2xl relative overflow-hidden border transition-all duration-300 bg-white text-slate-800 border-slate-200">
+        
+        <!-- HEADER -->
+        <header id="app-header" class="flex h-16 items-center justify-between px-4 border-b shrink-0 select-none md:rounded-t-[36px] bg-white border-gray-200 text-slate-800 transition-all">
+          <div class="flex items-center gap-2">
+            <button id="sidebar-toggle-btn" class="flex h-10 w-10 items-center justify-center rounded-xl border bg-gray-50 border-gray-200 hover:bg-gray-100 active:scale-90 transition-all cursor-pointer text-gray-700">
+              <i data-lucide="menu" class="h-5.5 w-5.5"></i>
+            </button>
+            <button id="viewer-close-btn" class="hidden flex h-10 w-10 items-center justify-center rounded-xl border bg-gray-50 border-gray-200 hover:bg-gray-100 active:scale-90 transition-all cursor-pointer text-gray-700" title="記録画面に戻る">
+              <i data-lucide="arrow-left" class="h-5.5 w-5.5"></i>
+            </button>
+            <h1 id="main-header-title" class="text-sm sm:text-base font-black tracking-tight hidden xs:block">睡眠・体調記録</h1>
+          </div>
+          
+          <!-- DATE NAVIGATOR -->
+          <div id="date-navigator" class="flex items-center justify-center gap-1 shrink-0 px-1">
+            <button id="prev-day-btn" class="text-base sm:text-lg font-black px-2 py-1.5 hover:scale-110 active:scale-95 text-blue-600 cursor-pointer select-none">◀</button>
+            <div class="relative text-center px-1 shrink-0 cursor-pointer">
+              <div class="flex items-center justify-center gap-1.5 leading-none">
+                <span id="date-display" class="text-xs sm:text-sm md:text-base font-extrabold font-mono text-slate-900">2026/06/21</span>
+                <span id="weekday-display" class="text-xs sm:text-sm font-extrabold text-gray-500">(日)</span>
+              </div>
+              <input type="date" id="native-date-picker" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+            </div>
+            <button id="next-day-btn" class="text-base sm:text-lg font-black px-2 py-1.5 hover:scale-110 active:scale-95 text-blue-600 cursor-pointer select-none">▶</button>
+          </div>
+
+          <!-- VIEWER HEADER TITLE -->
+          <div id="header-viewer-title" class="hidden text-center shrink-0 font-extrabold text-sm sm:text-base text-blue-500 tracking-tight select-none">
+            全履歴ビュアー
+          </div>
+
+          <!-- TABS -->
+          <div class="flex border-l pl-2 gap-1.5 font-bold text-xs select-none">
+            <button id="tab-record" class="px-2.5 py-1.5 rounded-lg font-bold transition-all bg-blue-600 text-white shadow-sm cursor-pointer">記録</button>
+            <button id="tab-chart" class="px-2.5 py-1.5 rounded-lg font-bold transition-all bg-gray-100 text-slate-705 hover:bg-gray-200 cursor-pointer">分析</button>
+          </div>
+        </header>
+
+        <!-- MAIN LAYOUT WRAPPER -->
+        <main class="flex-1 flex flex-col overflow-hidden relative">
+          
+          <!-- TOAST CONTAINER -->
+          <div id="toast-el" class="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs xs:text-sm px-4.5 py-2.5 rounded-2xl shadow-xl border border-slate-700/50 flex items-center gap-2 z-50 pointer-events-none opacity-0 transition-all duration-300">
+            <span id="toast-text">Toast message</span>
+          </div>
+
+          <!-- 1. RECORD VIEW (GRID) -->
+          <div id="view-record" class="flex-1 flex flex-col overflow-hidden">
+            
+            <!-- TOOL PALETTE -->
+            <div id="palette-container" class="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50/50 border-b select-none transition-all">
+              <div class="flex flex-wrap items-center gap-1.5" id="stamps-palette-row">
+                <!-- Stamps loaded programmatically -->
+              </div>
+              <div class="flex items-center gap-1 border-l pl-2">
+                <button id="btn-eraser" class="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-slate-700 cursor-pointer">
+                  <i data-lucide="eraser" class="w-3.5 h-3.5"></i>
+                  <span>消しゴム</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- THE GRID CANVAS -->
+            <div class="flex-1 flex flex-col p-2 bg-[#f8f9fa] overflow-hidden relative select-none">
+              <div class="flex-1 flex flex-col border border-gray-200 rounded-2xl overflow-hidden shadow-xs bg-white relative">
+                <div id="grid-scroll-box" class="flex-1 overflow-x-auto overflow-y-auto scrollbar-thin touch-auto">
+                  <div class="min-w-max flex flex-col divide-y divide-gray-100" id="grid-content-body">
+                    <!-- Dynamic rendering of 48 half-hour rows -->
+                  </div>
+                </div>
+                <!-- SLEEP VIEWER SECTION -->
+                <div id="sleep-viewer-container" class="absolute inset-0 flex flex-col hidden select-none z-10 bg-white">
+                </div>
+              </div>
+            </div>
+
+            <!-- ACTION CONTROLS / SHORTCUTS -->
+            <div id="action-controls-container" class="p-3 border-t bg-white flex flex-col gap-2 select-none">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold">
+                <div class="flex gap-2">
+                  <button id="btn-copy-prev" class="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-105 text-blue-700 rounded-xl border border-blue-150 transition-colors cursor-pointer flex items-center gap-1.5 shrink-0">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    <span>前日の記録をコピー</span>
+                  </button>
+                  <button id="btn-clear-today" class="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-105 text-rose-700 rounded-xl border border-rose-150 transition-colors cursor-pointer flex items-center gap-1.5 shrink-0">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span>今日の記録をクリア</span>
+                  </button>
+                </div>
+                <div class="hidden sm:flex text-slate-400 font-medium">ショートカットキー: ◀/▶ (日付移動), 0/1/2.. (スタンプ選定)</div>
+              </div>
+              <div>
+                <textarea id="memo-textarea" placeholder="今日のメモ、体調、気分などを自由に記入..." class="w-full h-18 p-2.5 text-xs text-slate-800 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none transition-shadow" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. ANALYTICS / HISTORY VIEW -->
+          <div id="view-chart" class="flex-1 overflow-y-auto p-4 hidden flex flex-col gap-5 bg-slate-50 transition-all">
+            
+            <!-- STATS CARDS -->
+            <div class="grid grid-cols-2 xs:grid-cols-4 gap-3">
+              <div class="bg-blue-50/50 p-3 rounded-2xl border border-blue-100/60 text-center">
+                <span class="text-[11px] text-blue-600 font-extrabold block">睡眠時間</span>
+                <span id="stat-sleep" class="text-lg xs:text-xl font-black font-sans text-blue-900 mt-1 block">0時間</span>
+              </div>
+              <div class="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/60 text-center">
+                <span class="text-[11px] text-indigo-600 font-extrabold block">布団にいた時間</span>
+                <span id="stat-inbed" class="text-lg xs:text-xl font-black font-sans text-indigo-900 mt-1 block">0時間</span>
+              </div>
+              <div class="bg-orange-50/50 p-3 rounded-2xl border border-orange-100/60 text-center">
+                <span class="text-[11px] text-orange-600 font-extrabold block">夜間目覚め</span>
+                <span id="stat-wake" class="text-lg xs:text-xl font-black font-sans text-orange-900 mt-1 block">0回</span>
+              </div>
+              <div class="bg-purple-50/50 p-3 rounded-2xl border border-purple-100/60 text-center">
+                <span class="text-[11px] text-purple-600 font-extrabold block">入眠までの時間</span>
+                <span id="stat-onset" class="text-lg xs:text-xl font-black font-sans text-purple-900 mt-1 block">－</span>
+              </div>
+            </div>
+
+            <!-- WEEKLY TIMELINE -->
+            <div class="bg-white p-4.5 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col gap-3">
+              <h3 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-500"></i>
+                <span>直近7日間の睡眠グラフ</span>
+              </h3>
+              <div class="h-44 w-full flex items-end gap-1 px-1 mt-2" id="canvas-timeline-container">
+                <!-- Interactive timeline items -->
+              </div>
+            </div>
+
+            <!-- TOTAL HISTORY LOG TABLE -->
+            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-xs flex flex-col overflow-hidden">
+              <div class="p-3.5 bg-slate-50 border-b flex justify-between items-center">
+                <h3 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <i data-lucide="list-todo" class="w-4 h-4 text-pink-500"></i>
+                  <span>記録全履歴一覧</span>
+                </h3>
+                <span class="text-[10px] font-bold text-slate-550" id="history-total-count">計 0日</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50/50 font-bold border-b text-slate-500">
+                      <th class="p-2.5">日付</th>
+                      <th class="p-2.5">睡眠時間</th>
+                      <th class="p-2.5">入眠時間</th>
+                      <th class="p-2.5">メモ / 日誌</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-table-body" class="divide-y divide-gray-100">
+                    <!-- History rows programmatically loaded -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- BOTTOM TOOL STATUS AND DISPLAY CONFIG -->
+        <footer id="app-footer" class="h-10 border-t shrink-0 flex items-center justify-between px-4 text-[10px] sm:text-xs font-bold text-slate-500 bg-white border-gray-200 select-none">
+          <div class="flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span id="footer-storage-info">ローカル保存中 (0記録)</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="gdrive-status" class="text-[10px] text-gray-400">ドライブ連携: 未接続</span>
+          </div>
+        </footer>
+
+        <!-- DRAWER SIDEBAR (OVERLAY) -->
+        <div id="sidebar-overlay" class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-50 pointer-events-none opacity-0 transition-opacity duration-300">
+          <div id="sidebar-drawer" class="absolute top-0 left-0 bottom-0 w-72 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col -translate-x-full transition-transform duration-300 z-52">
+            
+            <!-- Side header -->
+            <div class="p-4 border-b flex items-center justify-between">
+              <h2 class="font-extrabold font-sans text-sm sm:text-base tracking-tight flex items-center gap-2">
+                <i data-lucide="user-cog" class="w-5 h-5 text-blue-600"></i>
+                <span>各種設定 & 高度な操作</span>
+              </h2>
+              <button id="sidebar-close-btn" class="p-1 rounded-full hover:bg-gray-100 cursor-pointer">
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+
+            <!-- Settings Content -->
+            <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-6 text-xs font-extrabold text-slate-800">
+              
+              <!-- 1. Display Mode Toggle -->
+              <div class="flex flex-col gap-2">
+                <label class="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">アプリの表示テーマ</label>
+                <div class="grid grid-cols-3 gap-1 bg-gray-50 p-1 border rounded-xl">
+                  <button id="theme-vivid" class="py-2 px-1 text-center font-extrabold rounded-lg text-[10px] transition-all bg-white shadow-sm hover:bg-white border-blue-200 cursor-pointer text-blue-700">はっきり</button>
+                  <button id="theme-soft" class="py-2 px-1 text-center font-extrabold rounded-lg text-[10px] transition-all hover:bg-white cursor-pointer text-slate-500">やさしい</button>
+                  <button id="theme-dark" class="py-2 px-1 text-center font-extrabold rounded-lg text-[10px] transition-all hover:bg-white cursor-pointer text-slate-500">ダーク</button>
+                </div>
+              </div>
+
+              <!-- 1.5 View Mode Selector -->
+              <div class="flex flex-col gap-2">
+                <label class="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">表示モード</label>
+                <div class="grid grid-cols-2 gap-1 bg-gray-50 p-1 border rounded-xl">
+                  <button id="view-mode-standard" class="py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all bg-white shadow-sm hover:bg-white cursor-pointer text-blue-700">標準記録</button>
+                  <button id="view-mode-viewer" class="py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all hover:bg-white cursor-pointer text-slate-500">履歴ビュアー</button>
+                </div>
+              </div>
+
+              <!-- 2. Clock Format Settings -->
+              <div class="flex flex-col gap-2">
+                <label class="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">時間枠の表記方法</label>
+                <div class="grid grid-cols-2 gap-1 bg-gray-50 p-1 border rounded-xl">
+                  <button id="hour-format-023" class="py-2 px-1 text-center rounded-lg text-[10.5px] transition-all bg-white shadow-sm cursor-pointer text-slate-700">0〜23時</button>
+                  <button id="hour-format-124" class="py-2 px-1 text-center rounded-lg text-[10.5px] transition-all cursor-pointer text-slate-500">1〜24時</button>
+                </div>
+              </div>
+
+              <!-- 2.5 Input Drag Method Toggle -->
+              <div class="flex flex-col gap-2">
+                <label class="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">入力ジェスチャー</label>
+                <div class="grid grid-cols-2 gap-1 bg-gray-50 p-1 border rounded-xl">
+                  <button id="input-tool-tap" class="py-2 px-1 text-center rounded-lg text-[10.5px] transition-all bg-white shadow-sm cursor-pointer text-slate-700">単発タップ</button>
+                  <button id="input-tool-paint" class="py-2 px-1 text-center rounded-lg text-[10.5px] transition-all cursor-pointer text-slate-500">なぞり塗り</button>
+                </div>
+              </div>
+
+              <!-- 3. Google Drive Sync Section -->
+              <div class="p-3 border rounded-xl bg-blue-50/30 border-blue-100 flex flex-col gap-2">
+                <h3 class="text-blue-900 flex items-center gap-1.5 font-black text-[12px]">
+                  <i data-lucide="cloud" class="w-4 h-4 text-blue-600"></i>
+                  <span>Googleドライブ クラウド同期</span>
+                </h3>
+                <p class="text-[10px] text-slate-600 font-medium leading-relaxed">
+                  複数端末で同期したり、予期せぬ端末の紛失・トラブルに備えてGoogle Driveアプリ領域へ睡眠記録の安全なセーブデータを自動・手動で保管します。
+                </p>
+                <div id="gdrive-actions-section" class="flex flex-col gap-1.5 mt-1">
+                  <button id="btn-gdrive-login" class="w-full py-2 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-1.5 hover:bg-blue-700 cursor-pointer">
+                    <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+                    <span>連携する (Googleログイン)</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 4. Local File Backups -->
+              <div class="flex flex-col gap-2.5">
+                <label class="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">バックアップ / データ入出力</label>
+                <div class="flex flex-col gap-1.5">
+                  <button id="btn-export-json" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer text-slate-700">
+                    <i data-lucide="download" class="w-3.5 h-3.5 text-blue-500"></i>
+                    <span>JSONファイルを書き出す</span>
+                  </button>
+                  <label class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer text-center text-slate-700">
+                    <i data-lucide="upload" class="w-3.5 h-3.5 text-indigo-505"></i>
+                    <span>JSONファイルを読み込み</span>
+                    <input type="file" id="input-json-file" accept=".json" class="hidden" />
+                  </label>
+                  <button id="btn-export-csv" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer text-slate-700">
+                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-500"></i>
+                    <span>CSVファイルを書き出す</span>
+                  </button>
+                  <label class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer text-center text-slate-700">
+                    <i data-lucide="file-up" class="w-3.5 h-3.5 text-purple-500"></i>
+                    <span>CSVファイルから読み込み</span>
+                    <input type="file" id="input-csv-file" accept=".csv" class="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <!-- 5. Activity Layout Columns Edit Section -->
+              <div class="flex flex-col gap-2">
+                <label class="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">活動記録列（右側のチェック列）</label>
+                <div class="flex items-center justify-between bg-gray-50 py-1.5 px-3 border rounded-xl">
+                  <span>表示列数 (1〜10列)</span>
+                  <select id="select-col-count" class="bg-white border rounded px-1.5 py-1 focus:ring-1 focus:ring-blue-500 font-mono">
+                    <option value="1">1列</option>
+                    <option value="2">2列</option>
+                    <option value="3" selected>3列</option>
+                    <option value="4">4列</option>
+                    <option value="5">5列</option>
+                    <option value="6">6列</option>
+                    <option value="7">7列</option>
+                    <option value="8">8列</option>
+                    <option value="9">9列</option>
+                    <option value="10">10列</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 6. Delete Everything button -->
+              <div class="border-t pt-4">
+                <button id="btn-factory-reset" class="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl border border-rose-150 flex items-center justify-center gap-1.5 cursor-pointer">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  <span>全データを削除して初期化</span>
+                </button>
+              </div>
+
+            </div>
+
+            <!-- Version brand -->
+            <div class="p-3 border-t bg-gray-50/50 text-[10px] text-gray-400 text-center font-sans tracking-wide">
+              Remix: 睡眠記録アプリ v5.2 (完全1ファイル版)
+            </div>
+            
+          </div>
+        </div>
+
+        <!-- STAMPS CONFIG EDIT MODAL OVERLAY -->
+        <div id="stamps-config-modal" class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans border-none hidden">
+          <div class="bg-white rounded-2xl w-full max-w-sm shadow-xl p-5 border border-slate-100 animate-in fade-in zoom-in duration-150">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-sm font-black text-slate-800" id="stamp-edit-title">スタンプの設定変更</h3>
+              <button id="btn-close-stamps-modal" class="p-1 rounded-full hover:bg-slate-100 text-slate-400">
+                <i data-lucide="x" class="w-4.5 h-4.5"></i>
+              </button>
+            </div>
+            <div class="flex flex-col gap-4 text-xs font-extrabold text-slate-700">
+              <div class="flex flex-col gap-1.5">
+                <label>表示名（2字〜3字程度推奨）</label>
+                <input type="text" id="stamp-edit-name" class="w-full p-2 border rounded-xl focus:ring-2 focus:ring-blue-500 font-sans" />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label>下地になる一文字記号</label>
+                <input type="text" id="stamp-edit-symbol" maxlength="1" class="w-full p-2 border rounded-xl text-center text-base focus:ring-2 focus:ring-blue-500 font-mono" />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label>カラーテーマ</label>
+                <div class="grid grid-cols-5 gap-2" id="grid-stamp-colors">
+                  <!-- Color selection tiles programmatically loaded -->
+                </div>
+              </div>
+              <button id="stamp-save-btn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl cursor-pointer shadow-sm text-center">設定を保存する</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADVANCED CUSTOM ACTIVITY COLUMNS MODAL OVERLAY -->
+        <div id="column-config-modal" class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans border-none hidden">
+          <div class="bg-white rounded-2xl w-full max-w-sm shadow-xl p-5 border border-slate-100 animate-in face-in zoom-in duration-150">
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="text-sm font-black text-slate-800">活動列の設定</h3>
+              <button id="btn-close-column-modal" class="p-1 rounded-full hover:bg-slate-100 text-slate-400">
+                <i data-lucide="x" class="w-4.5 h-4.5"></i>
+              </button>
+            </div>
+            <div class="flex flex-col gap-4.5 text-xs font-extrabold text-slate-700">
+              <div class="flex flex-col gap-1.5">
+                <label>項目名</label>
+                <input type="text" id="column-edit-name" class="w-full p-2 border rounded-xl focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label>データの管理アクション</label>
+                <select id="column-edit-action" class="w-full p-2 border rounded-xl bg-white focus:ring-2 focus:ring-blue-500">
+                  <option value="keep">過去の記録を残したまま名前変更</option>
+                  <option value="clear">これまでの過去データを全期間で消去する</option>
+                  <option value="archive">過去データを末尾列に退避して新調する</option>
+                </select>
+                <span class="text-[10px] text-gray-500 font-medium font-sans">※末尾に退避を選ぶと、新列が追加され、既存のデータがそこへ保存されます。</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button id="btn-column-swap" class="flex-1 py-2 border rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center gap-1 leading-none text-slate-650 cursor-pointer">
+                  <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+                  <span>列位置を右隣と交換</span>
+                </button>
+              </div>
+              <button id="column-save-btn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl cursor-pointer">列の設定を反映</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- MAIN APP CONTROLLER SCRIPT -->
+    <script>
+      // 1. Storage Keys
+      const STORAGE_KEY = 'sleep_records_data';
+      const HOUR_REP_KEY = 'sleep_hour_rep';
+      const DISPLAY_MODE_KEY = 'sleep_app_display_mode';
+      const INPUT_METHOD_KEY = 'input_method';
+      const STAMPS_KEY = 'sleep_app_stamps_v3';
+      const COL_COUNT_KEY = 'sleep_custom_col_count';
+      const COL_NAMES_KEY = 'sleep_custom_col_names';
+
+      // 2. Default Configuration & Theme Assets
+      const DEFAULT_STAMPS = [
+        { id: '★', name: '就寝', symbol: '★', color: 'purple' },
+        { id: 'S', name: '睡眠', symbol: 'S', color: 'sky' },
+        { id: '×', name: '覚醒', symbol: '×', color: 'orange' },
+        { id: '○', name: '起床', symbol: '○', color: 'yellow' },
+        { id: '－', name: '横寝', symbol: '－', color: 'green' }
+      ];
+
+      const STAMP_COLORS = {
+        purple: { bg: 'bg-[#9333ea]', hover: 'hover:bg-[#a855f7]', border: 'border-[#7c3aed]', text: 'text-white', hex: '#9333ea', softBg: 'bg-[#f3e8ff]', softText: 'text-purple-700', softBorder: 'border-purple-200' },
+        sky:    { bg: 'bg-[#2563eb]', hover: 'hover:bg-[#3b82f6]', border: 'border-[#1d4ed8]', text: 'text-white', hex: '#2563eb', softBg: 'bg-[#e0f2fe]', softText: 'text-sky-700', softBorder: 'border-sky-200' },
+        orange: { bg: 'bg-[#dc2626]', hover: 'hover:bg-[#ef4444]', border: 'border-[#b91c1c]', text: 'text-white', hex: '#dc2626', softBg: 'bg-[#ffedd5]', softText: 'text-orange-700', softBorder: 'border-orange-200' },
+        yellow: { bg: 'bg-[#eab308]', hover: 'hover:bg-[#facc15]', border: 'border-[#ca8a04]', text: 'text-black', hex: '#eab308', softBg: 'bg-[#fef9c3]', softText: 'text-yellow-700', softBorder: 'border-yellow-200' },
+        green:  { bg: 'bg-[#16a34a]', hover: 'hover:bg-[#22c55e]', border: 'border-[#15803d]', text: 'text-white', hex: '#16a34a', softBg: 'bg-[#dcfce7]', softText: 'text-green-700', softBorder: 'border-green-200' },
+        pink:   { bg: 'bg-[#db2777]', hover: 'hover:bg-[#ec4899]', border: 'border-[#be185d]', text: 'text-white', hex: '#db2777', softBg: 'bg-pink-50', softText: 'text-pink-700', softBorder: 'border-pink-200' },
+        indigo: { bg: 'bg-[#4f46e5]', hover: 'hover:bg-[#6366f1]', border: 'border-[#4338ca]', text: 'text-white', hex: '#4f46e5', softBg: 'bg-indigo-50', softText: 'text-indigo-700', softBorder: 'border-indigo-200' },
+        teal:   { bg: 'bg-[#0d9488]', hover: 'hover:bg-[#14b8a6]', border: 'border-[#0f766e]', text: 'text-white', hex: '#0d9488', softBg: 'bg-teal-50', softText: 'text-teal-700', softBorder: 'border-teal-200' },
+        rose:   { bg: 'bg-[#e11d48]', hover: 'hover:bg-[#f43f5e]', border: 'border-[#be123c]', text: 'text-white', hex: '#e11d48', softBg: 'bg-rose-50', softText: 'text-rose-700', softBorder: 'border-rose-200' },
+        slate:  { bg: 'bg-[#475569]', hover: 'hover:bg-[#64748b]', border: 'border-[#334155]', text: 'text-white', hex: '#475569', softBg: 'bg-slate-50', softText: 'text-slate-700', softBorder: 'border-slate-200' }
+      };
+
+      // 3. Database State Modules
+      let selectedDate = getLocalDateString(new Date());
+      let records = loadRecords();
+      let stamps = loadStamps();
+      let activeSymbol = stamps.length > 0 ? stamps[0].id : 'S';
+      let activeTool = 'stamp'; // 'stamp' or 'eraser'
+      let hourRep = localStorage.getItem(HOUR_REP_KEY) || '0-23';
+      let displayMode = localStorage.getItem(DISPLAY_MODE_KEY) || 'vivid';
+      let inputMethod = localStorage.getItem(INPUT_METHOD_KEY) || 'stamp';
+      let customColCount = loadColCount();
+      let customColNames = loadColNames(customColCount);
+
+      const GRID_MODE_KEY = 'grid_mode';
+      let gridMode = localStorage.getItem(GRID_MODE_KEY) || 'standard';
+      let viewerPeriod = localStorage.getItem('viewer_view_mode') || 'month';
+
+      // Google Drive OAuth session cache
+      let firebaseConfig = null;
+      let firebaseApp = null;
+      let firebaseAuth = null;
+      let driveAccessToken = null;
+      let userProfile = null;
+      let isPointerDown = false;
+      let lastInteractedId = null;
+
+      // 4. Utility State & Dates
+      function getLocalDateString(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function shiftDateString(dateStr, delta) {
+        const d = new Date(dateStr);
+        d.setDate(d.getDate() + delta);
+        return getLocalDateString(d);
+      }
+
+      function formatDateLabel(dateStr) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        const days = ['日', '月', '火', '水', '木', '金', '土'];
+        return {
+          date: `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`,
+          day: `(${days[d.getDay()]})`
+        };
+      }
+
+      // Local Data Helpers
+      function loadRecords() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+          console.error(e);
+          return {};
+        }
+      }
+
+      function saveRecords() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+        updateFooterStatus();
+      }
+
+      function loadStamps() {
+        try {
+          const raw = localStorage.getItem(STAMPS_KEY);
+          return raw ? JSON.parse(raw) : DEFAULT_STAMPS;
+        } catch (e) {
+          return DEFAULT_STAMPS;
+        }
+      }
+
+      function saveStamps() {
+        localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps));
+      }
+
+      function loadColCount() {
+        const count = parseInt(localStorage.getItem(COL_COUNT_KEY), 10);
+        return isNaN(count) ? 3 : count;
+      }
+
+      function loadColNames(count) {
+        try {
+          const raw = localStorage.getItem(COL_NAMES_KEY);
+          if (raw) {
+            const arr = JSON.parse(raw);
+            while (arr.length < count) arr.push(`列${arr.length + 2}`);
+            return arr.slice(0, count);
+          }
+        } catch (e) {}
+        return Array.from({ length: count }, (_, i) => `列${i + 2}`);
+      }
+
+      function saveColConfig() {
+        localStorage.setItem(COL_COUNT_KEY, String(customColCount));
+        localStorage.setItem(COL_NAMES_KEY, JSON.stringify(customColNames));
+      }
+
+      function createBlankRecord() {
+        const obj = { memo: '', customCols: {} };
+        for (let s = 0; s < 48; s++) {
+          obj[s] = null;
+        }
+        return obj;
+      }
+
+      function getEffectiveSymbol(val) {
+        if (!val) return null;
+        const st = stamps.find(s => s.id === val);
+        return st ? st.symbol : val;
+      }
+
+      // Calculations & Analytics Engines
+      function calculateStats(recordData) {
+        let sleepHours = 0;
+        let inBedHours = 0;
+        let wakeupCount = 0;
+        let firstSleepIdx = -1;
+
+        if (recordData) {
+          for (let i = 0; i < 48; i++) {
+            if (getEffectiveSymbol(recordData[i]) === 'S') {
+              firstSleepIdx = i;
+              break;
+            }
+          }
+
+          for (let i = 0; i < 48; i++) {
+            const sym = getEffectiveSymbol(recordData[i]);
+            if (sym === 'S') sleepHours += 0.5;
+            if (['★', 'S', '○', '－'].includes(sym)) inBedHours += 0.5;
+            if (sym === '×' && firstSleepIdx !== -1 && i > firstSleepIdx) {
+              wakeupCount++;
+            }
+          }
+        }
+
+        // Calculate Onset Latency
+        let onsetStr = '－';
+        if (recordData) {
+          let bedtimeIdx = -1;
+          for (let i = 0; i < 48; i++) {
+            if (getEffectiveSymbol(recordData[i]) === '★') {
+              bedtimeIdx = i;
+              break;
+            }
+          }
+          if (bedtimeIdx !== -1) {
+            let sleepIdx = -1;
+            for (let i = bedtimeIdx + 1; i < 48; i++) {
+              if (getEffectiveSymbol(recordData[i]) === 'S') {
+                sleepIdx = i;
+                break;
+              }
+            }
+            if (sleepIdx !== -1) {
+              const diff = (sleepIdx - bedtimeIdx) * 0.5;
+              onsetStr = diff === 0.5 ? '30分' : `${diff}時間`;
+            }
+          }
+        }
+
+        return { sleepHours, inBedHours, wakeupCount, onsetStr };
+      }
+
+      // Toast Alerts
+      function showToast(msg) {
+        const el = document.getElementById('toast-el');
+        const txt = document.getElementById('toast-text');
+        txt.textContent = msg;
+        el.style.opacity = '100';
+        el.style.pointerEvents = 'auto';
+        setTimeout(() => {
+          el.style.opacity = '0';
+          el.style.pointerEvents = 'none';
+        }, 1800);
+      }
+
+      // 5. RENDERING ENGINE
+      function updateDisplayStyles() {
+        const mockup = document.getElementById('device-mockup');
+        const header = document.getElementById('app-header');
+        const footer = document.getElementById('app-footer');
+        const sidebar = document.getElementById('sidebar-drawer');
+        const toast = document.getElementById('toast-el');
+        const palette = document.getElementById('palette-container');
+        const viewerCloseBtn = document.getElementById('viewer-close-btn');
+
+        if (displayMode === 'dark') {
+          // DARK COSMIC MODE
+          document.body.className = "bg-slate-950 antialiased overflow-hidden selection:bg-blue-500/30";
+          mockup.className = "w-full max-w-[485px] md:max-w-[768px] lg:max-w-[1012px] xl:max-w-[1180px] h-[100dvh] md:h-[94vh] md:max-h-[880px] flex flex-col md:rounded-[36px] shadow-2xl relative overflow-hidden border transition-all duration-300 bg-[#070b13] text-white border-slate-900";
+          header.className = "flex h-16 items-center justify-between px-4 border-b shrink-0 select-none md:rounded-t-[36px] bg-slate-900 border-slate-800 text-white transition-all";
+          footer.className = "h-10 border-t shrink-0 flex items-center justify-between px-4 text-[10px] sm:text-xs font-bold text-slate-400 bg-slate-900 border-slate-800 select-none";
+          sidebar.className = "absolute top-0 left-0 bottom-0 w-72 max-w-[85vw] bg-slate-900 h-full shadow-2xl flex flex-col -translate-x-full transition-transform duration-300 z-52 border-r border-slate-800 text-white";
+          palette.className = "flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-900 border-b border-slate-800 select-none transition-all";
+          
+          document.getElementById('sidebar-toggle-btn').className = "flex h-10 w-10 items-center justify-center rounded-xl border bg-slate-850 border-slate-700 hover:bg-slate-800 active:scale-90 transition-all cursor-pointer text-white";
+          if (viewerCloseBtn) viewerCloseBtn.className = "flex h-10 w-10 items-center justify-center rounded-xl border bg-slate-850 border-slate-700 hover:bg-slate-800 active:scale-90 transition-all cursor-pointer text-white";
+          document.getElementById('prev-day-btn').className = "text-base sm:text-lg font-black px-2 py-1.5 hover:scale-110 active:scale-95 text-sky-400 cursor-pointer select-none";
+          document.getElementById('next-day-btn').className = "text-base sm:text-lg font-black px-2 py-1.5 hover:scale-110 active:scale-95 text-sky-400 cursor-pointer select-none";
+          document.getElementById('date-display').className = "text-xs sm:text-sm md:text-base font-extrabold font-mono text-white";
+          document.getElementById('weekday-display').className = "text-xs sm:text-sm font-extrabold text-slate-400";
+          
+          document.getElementById('memo-textarea').className = "w-full h-18 p-2.5 text-xs text-white bg-slate-950 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none transition-shadow";
+        } else {
+          // LIGHT / SOFT THEME
+          document.body.className = "bg-slate-900 md:bg-slate-950 antialiased overflow-hidden selection:bg-blue-500/30";
+          mockup.className = "w-full max-w-[485px] md:max-w-[768px] lg:max-w-[1012px] xl:max-w-[1180px] h-[100dvh] md:h-[94vh] md:max-h-[880px] flex flex-col md:rounded-[36px] shadow-2xl relative overflow-hidden border transition-all duration-300 bg-white text-slate-800 border-slate-200";
+          header.className = "flex h-16 items-center justify-between px-4 border-b shrink-0 select-none md:rounded-t-[36px] bg-white border-gray-200 text-slate-800 transition-all";
+          footer.className = "h-10 border-t shrink-0 flex items-center justify-between px-4 text-[10px] sm:text-xs font-bold text-slate-500 bg-white border-gray-200 select-none";
+          sidebar.className = "absolute top-0 left-0 bottom-0 w-72 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col -translate-x-full transition-transform duration-300 z-52 text-slate-80s";
+          palette.className = "flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50/50 border-b select-none transition-all";
+
+          document.getElementById('sidebar-toggle-btn').className = "flex h-10 w-10 items-center justify-center rounded-xl border bg-gray-50 border-gray-200 hover:bg-gray-100 active:scale-90 transition-all cursor-pointer text-gray-700";
+          if (viewerCloseBtn) viewerCloseBtn.className = "flex h-10 w-10 items-center justify-center rounded-xl border bg-gray-50 border-gray-200 hover:bg-gray-100 active:scale-90 transition-all cursor-pointer text-gray-700";
+          document.getElementById('prev-day-btn').className = "text-base sm:text-lg font-black px-2 py-1.5 hover:scale-110 active:scale-95 text-blue-600 cursor-pointer select-none";
+          document.getElementById('next-day-btn').className = "text-base sm:text-lg font-black px-2 py-1.5 hover:scale-110 active:scale-95 text-blue-600 cursor-pointer select-none";
+          document.getElementById('date-display').className = "text-xs sm:text-sm md:text-base font-extrabold font-mono text-slate-900";
+          document.getElementById('weekday-display').className = "text-xs sm:text-sm font-extrabold text-gray-500";
+          
+          document.getElementById('memo-textarea').className = "w-full h-18 p-2.5 text-xs text-slate-800 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none transition-shadow";
+        }
+      }
+
+      function updateFooterStorageText() {
+        const size = Object.keys(records).length;
+        document.getElementById('footer-storage-info').textContent = `ローカル保存中 (${size}記録)`;
+      }
+
+      // Render Active Tool Palette Buttons
+      function renderPalette() {
+        const row = document.getElementById('stamps-palette-row');
+        row.innerHTML = '';
+        
+        stamps.forEach((st) => {
+          const btn = document.createElement('button');
+          btn.className = `flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg border transition-all cursor-pointer select-none`;
+          
+          const clrObj = STAMP_COLORS[st.color] || STAMP_COLORS.purple;
+          
+          // Style active state beautifully
+          if (activeTool === 'stamp' && activeSymbol === st.id) {
+            btn.classList.add(clrObj.bg, clrObj.border, 'scale-105', 'shadow-xs');
+            btn.style.color = (st.color === 'yellow') ? '#000000' : '#ffffff';
+          } else {
+            btn.classList.add(clrObj.softBg, clrObj.softBorder, clrObj.softText, 'hover:scale-102');
+          }
+          
+          btn.innerHTML = `<span class="text-xs sm:text-sm font-black leading-none">${st.id}</span> <span>${st.name}</span>`;
+          btn.addEventListener('click', () => {
+            activeTool = 'stamp';
+            activeSymbol = st.id;
+            renderPalette();
+          });
+          row.appendChild(btn);
+        });
+
+        // Add visual toggle to Edit Stamp config option upon holding click on standard button
+        row.querySelectorAll('button').forEach((b, idx) => {
+          b.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            openStampConfigModal(idx);
+          });
+        });
+
+        // Setup Eraser state
+        const eraserBtn = document.getElementById('btn-eraser');
+        if (activeTool === 'eraser') {
+          eraserBtn.className = "flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg border border-rose-500 bg-rose-500 text-white cursor-pointer shadow-xs scale-105 transition-all";
+        } else {
+          eraserBtn.className = "flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-slate-700 cursor-pointer transition-all";
+        }
+      }
+
+      function getViewerColor(symbol) {
+        if (!symbol) return displayMode === 'dark' ? 'bg-[#101726]/80' : 'bg-slate-100';
+        const stamp = stamps.find(s => s.id === symbol || s.symbol === symbol);
+        if (stamp) {
+          switch (stamp.color) {
+            case 'purple': return 'bg-purple-500';
+            case 'sky': return 'bg-sky-400';
+            case 'orange': return 'bg-orange-500';
+            case 'yellow': return 'bg-yellow-400';
+            case 'green': return 'bg-green-500';
+            case 'pink': return 'bg-pink-500';
+            case 'indigo': return 'bg-indigo-500';
+            case 'teal': return 'bg-teal-500';
+            case 'rose': return 'bg-rose-500';
+            case 'slate': return 'bg-slate-500';
+            default: return 'bg-purple-500';
+          }
+        }
+        return displayMode === 'dark' ? 'bg-[#101726]/80' : 'bg-slate-100';
+      }
+
+      function updateViewModeSidebarToggles() {
+        const standardBtn = document.getElementById('view-mode-standard');
+        const viewerBtn = document.getElementById('view-mode-viewer');
+        if (!standardBtn || !viewerBtn) return;
+
+        [standardBtn, viewerBtn].forEach(btn => {
+          btn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all hover:bg-white cursor-pointer text-slate-500";
+        });
+
+        if (gridMode === 'standard') {
+          if (displayMode === 'vivid') {
+            standardBtn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all bg-white shadow-sm hover:bg-white border cursor-pointer border-blue-200 text-blue-700";
+          } else if (displayMode === 'soft') {
+            standardBtn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all bg-white shadow-sm hover:bg-white border cursor-pointer border-green-250 text-green-700";
+          } else {
+            standardBtn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all bg-slate-850 border border-slate-800 shadow-sm cursor-pointer text-sky-400";
+          }
+        } else {
+          if (displayMode === 'vivid') {
+            viewerBtn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all bg-white shadow-sm hover:bg-white border cursor-pointer border-blue-200 text-blue-700";
+          } else if (displayMode === 'soft') {
+            viewerBtn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all bg-white shadow-sm hover:bg-white border cursor-pointer border-green-250 text-green-700";
+          } else {
+            viewerBtn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10.5px] transition-all bg-slate-850 border border-slate-800 shadow-sm cursor-pointer text-sky-400";
+          }
+        }
+      }
+
+      function syncCurrentViewMode() {
+        const viewerCloseBtn = document.getElementById('viewer-close-btn');
+        const dateNavigator = document.getElementById('date-navigator');
+        const headerTitle = document.getElementById('header-viewer-title');
+        const mainTitle = document.getElementById('main-header-title');
+        const paletteContainer = document.getElementById('palette-container');
+        const gridScrollBox = document.getElementById('grid-scroll-box');
+        const actionControlsContainer = document.getElementById('action-controls-container');
+        const sleepViewerContainer = document.getElementById('sleep-viewer-container');
+
+        if (gridMode === 'viewer') {
+          paletteContainer.classList.add('hidden');
+          gridScrollBox.classList.add('hidden');
+          actionControlsContainer.classList.add('hidden');
+          dateNavigator.classList.add('hidden');
+          if (mainTitle) mainTitle.classList.add('hidden');
+
+          sleepViewerContainer.classList.remove('hidden');
+          viewerCloseBtn.classList.remove('hidden');
+          if (headerTitle) headerTitle.classList.remove('hidden');
+
+          if (displayMode === 'dark') {
+            sleepViewerContainer.className = "absolute inset-0 flex flex-col select-none z-10 bg-[#090d16]";
+          } else {
+            sleepViewerContainer.className = "absolute inset-0 flex flex-col select-none z-10 bg-white";
+          }
+
+          renderViewer();
+        } else {
+          paletteContainer.classList.remove('hidden');
+          gridScrollBox.classList.remove('hidden');
+          actionControlsContainer.classList.remove('hidden');
+          dateNavigator.classList.remove('hidden');
+          if (mainTitle) mainTitle.classList.remove('hidden');
+
+          sleepViewerContainer.classList.add('hidden');
+          viewerCloseBtn.classList.add('hidden');
+          if (headerTitle) headerTitle.classList.add('hidden');
+
+          renderGrid();
+        }
+        updateViewModeSidebarToggles();
+      }
+
+      function renderViewer() {
+        const sleepViewerContainer = document.getElementById('sleep-viewer-container');
+        if (!sleepViewerContainer) return;
+
+        sleepViewerContainer.innerHTML = '';
+
+        const daysCount = viewerPeriod === 'month' ? 30 : 7;
+
+        let maxDate = new Date();
+        Object.keys(records).forEach(dStr => {
+          const dObj = new Date(dStr);
+          if (!isNaN(dObj.getTime()) && dObj > maxDate) {
+            maxDate = dObj;
+          }
+        });
+
+        const datesToDisplay = [];
+        for (let i = 0; i < daysCount; i++) {
+          const d = new Date(maxDate);
+          d.setDate(maxDate.getDate() - i);
+          datesToDisplay.push(getLocalDateString(d));
+        }
+
+        const viewerRoot = document.createElement('div');
+        viewerRoot.id = 'sleep-viewer-root';
+        viewerRoot.className = `flex flex-col flex-1 border-t rounded-b-2xl overflow-hidden select-none h-full ${
+          displayMode === 'dark' ? 'bg-[#090d16] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-800'
+        }`;
+
+        const selectorBar = document.createElement('div');
+        selectorBar.id = 'viewer-top-selector-bar';
+        selectorBar.className = `flex items-center justify-between px-3 h-9 border-b shrink-0 select-none ${
+          displayMode === 'dark' ? 'bg-slate-900 border-slate-800 text-yellow-400' : 'bg-slate-50 border-gray-200 text-slate-800'
+        }`;
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'text-[11px] font-black flex items-center gap-1.5';
+        titleDiv.innerHTML = `
+          <span class="flex h-1.5 w-1.5 rounded-full animate-pulse ${displayMode === 'dark' ? 'bg-yellow-400' : 'bg-blue-600'}"></span>
+          <span class="${displayMode === 'dark' ? 'text-yellow-400' : 'text-slate-800'} font-extrabold">全履歴ビュアー</span>
+        `;
+        selectorBar.appendChild(titleDiv);
+
+        const btnContainer = document.createElement('div');
+        btnContainer.className = `flex items-center rounded-md p-0.5 border ${
+          displayMode === 'dark' ? 'bg-slate-950 border-slate-850' : 'bg-slate-100 border-slate-200/50'
+        }`;
+
+        const btnWeek = document.createElement('button');
+        btnWeek.id = 'viewer-btn-week';
+        btnWeek.type = 'button';
+        btnWeek.className = `px-2 py-0.5 text-[9px] font-bold rounded-sm cursor-pointer transition-all duration-150 ${
+          viewerPeriod === 'week'
+            ? (displayMode === 'dark' ? 'bg-slate-800 text-sky-350 shadow-xs font-black' : 'bg-white text-blue-600 shadow-xs font-black')
+            : (displayMode === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+        }`;
+        btnWeek.textContent = '一週間 (7日)';
+        btnWeek.addEventListener('click', () => {
+          viewerPeriod = 'week';
+          localStorage.setItem('viewer_view_mode', 'week');
+          renderViewer();
+        });
+
+        const btnMonth = document.createElement('button');
+        btnMonth.id = 'viewer-btn-month';
+        btnMonth.type = 'button';
+        btnMonth.className = `px-2 py-0.5 text-[9px] font-bold rounded-sm cursor-pointer transition-all duration-150 ${
+          viewerPeriod === 'month'
+            ? (displayMode === 'dark' ? 'bg-slate-800 text-sky-350 shadow-xs font-black' : 'bg-white text-blue-600 shadow-xs font-black')
+            : (displayMode === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+        }`;
+        btnMonth.textContent = '一か月 (30日)';
+        btnMonth.addEventListener('click', () => {
+          viewerPeriod = 'month';
+          localStorage.setItem('viewer_view_mode', 'month');
+          renderViewer();
+        });
+
+        btnContainer.appendChild(btnWeek);
+        btnContainer.appendChild(btnMonth);
+        selectorBar.appendChild(btnContainer);
+        viewerRoot.appendChild(selectorBar);
+
+        const viewerHeader = document.createElement('div');
+        viewerHeader.id = 'viewer-header';
+        viewerHeader.className = `${
+          viewerPeriod === 'month' ? 'h-7 text-[10px]' : 'h-8 text-[11px]'
+        } ${
+          displayMode === 'dark' ? 'bg-slate-900 border-b-slate-800 text-sky-300' : 'bg-slate-100 border-b-gray-200 text-slate-700'
+        } border-b select-none text-center font-black items-center justify-items-stretch`;
+        viewerHeader.style.display = 'grid';
+        if (viewerPeriod === 'month') {
+          viewerHeader.style.gridTemplateColumns = '74px 30px 30px 30px 1fr';
+        } else {
+          viewerHeader.style.gridTemplateColumns = '82px 36px 36px 36px 1fr';
+        }
+
+        const titleDate = document.createElement('div');
+        titleDate.className = `text-left pl-1.5 font-black text-[11.5px] sm:text-[13px] ${displayMode === 'dark' ? 'text-yellow-405 text-yellow-400' : 'text-black'}`;
+        titleDate.textContent = '日付';
+        viewerHeader.appendChild(titleDate);
+
+        const titleSleep = document.createElement('div');
+        titleSleep.className = `font-black text-[10.5px] sm:text-[11.5px] ${displayMode === 'dark' ? 'text-sky-300' : 'text-slate-800'}`;
+        titleSleep.textContent = '睡眠';
+        viewerHeader.appendChild(titleSleep);
+
+        const titleWake = document.createElement('div');
+        titleWake.className = `font-black text-[10.5px] sm:text-[11.5px] ${displayMode === 'dark' ? 'text-sky-300' : 'text-slate-800'}`;
+        titleWake.textContent = '中途';
+        viewerHeader.appendChild(titleWake);
+
+        const titleOnset = document.createElement('div');
+        titleOnset.className = `font-black text-[10.5px] sm:text-[11.5px] ${displayMode === 'dark' ? 'text-sky-300' : 'text-slate-800'}`;
+        titleOnset.textContent = '入眠';
+        viewerHeader.appendChild(titleOnset);
+
+        const timelineHeader = document.createElement('div');
+        timelineHeader.id = 'viewer-header-timeline';
+        timelineHeader.className = 'h-full items-center px-1';
+        timelineHeader.style.display = 'grid';
+        timelineHeader.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+
+        for (let i = 0; i < 24; i++) {
+          const hourLabelDiv = document.createElement('div');
+          
+          let hr = i;
+          if (hourRep === '1-24') {
+            hr = i + 1;
+          }
+          
+          let shownLabel = '';
+          if (hourRep === '1-24') {
+            if (hr === 1 || hr === 6 || hr === 12 || hr === 18 || hr === 24) shownLabel = hr;
+          } else {
+            if (hr === 0 || hr === 6 || hr === 12 || hr === 18 || hr === 23) shownLabel = hr;
+          }
+
+          hourLabelDiv.className = `${
+            viewerPeriod === 'month' ? 'text-[7.5px]' : 'text-[9px]'
+          } font-extrabold text-center select-none font-mono ${
+            displayMode === 'dark' ? 'text-yellow-450 font-bold' : 'text-slate-400'
+          }`;
+          hourLabelDiv.textContent = shownLabel;
+          timelineHeader.appendChild(hourLabelDiv);
+        }
+        viewerHeader.appendChild(timelineHeader);
+        viewerRoot.appendChild(viewerHeader);
+
+        const rowsContainer = document.createElement('div');
+        rowsContainer.id = 'viewer-rows-container';
+        rowsContainer.className = `flex-1 overflow-y-auto select-none touch-pan-y divide-y ${
+          displayMode === 'dark' ? 'divide-slate-850 bg-[#090d16]' : 'divide-gray-150 bg-white'
+        }`;
+
+        datesToDisplay.forEach(dateStr => {
+          const dayRecord = records[dateStr] || createBlankRecord();
+          const stats = calculateStats(dayRecord);
+
+          const formattedDateLabel = (function() {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            return `${month}/${day}(${daysOfWeek[date.getDay()]})`;
+          })();
+
+          const latencyShortVal = stats.onsetStr === '－' ? '－' : stats.onsetStr.replace('時間', 'h').replace('分', 'm');
+          const wakeHours = stats.wakeupCount * 0.5;
+          const wakeLabel = wakeHours === 0.5 ? '30m' : wakeHours > 0 ? `${wakeHours}h` : '－';
+
+          const rowClass = viewerPeriod === 'month'
+            ? `h-[25px] sm:h-[26px] items-stretch divide-x transition-colors ${
+                displayMode === 'dark' ? 'divide-slate-800 hover:bg-slate-800/30' : 'divide-slate-105 hover:bg-slate-50/70'
+              }`
+            : `h-9 items-stretch divide-x transition-colors ${
+                displayMode === 'dark' ? 'divide-slate-800 hover:bg-slate-800/30' : 'divide-slate-105 hover:bg-slate-50/70'
+              }`;
+
+          const dateFontClass = viewerPeriod === 'month'
+            ? `text-[12px] xs:text-[13px] pl-1 font-black tracking-tighter ${displayMode === 'dark' ? 'bg-slate-900/60' : 'bg-slate-50/30'}`
+            : `text-[13.5px] xs:text-[14.5px] pl-1 sm:pl-1.5 font-black tracking-tighter ${displayMode === 'dark' ? 'bg-slate-900/40' : 'bg-slate-50/40'}`;
+
+          const statsFontClass = viewerPeriod === 'month'
+            ? `text-[9px] font-black font-mono ${displayMode === 'dark' ? 'text-sky-305' : 'text-slate-500'}`
+            : `text-[10px] sm:text-[11px] font-black font-mono ${displayMode === 'dark' ? 'text-sky-305' : 'text-slate-600'}`;
+
+          const gridPaddingClass = viewerPeriod === 'month'
+            ? `h-full items-stretch py-1 px-[2px] ${displayMode === 'dark' ? 'bg-slate-950/20' : 'bg-white/70'}`
+            : `h-full items-stretch py-1 px-1 ${displayMode === 'dark' ? 'bg-slate-950/20' : 'bg-white/70'}`;
+
+          const dayClass = displayMode === 'dark' ? 'text-yellow-405 text-yellow-400 font-extrabold' : 'text-black font-black';
+
+          const rowEl = document.createElement('div');
+          rowEl.id = `viewer-row-${dateStr}`;
+          rowEl.className = rowClass;
+          rowEl.style.display = 'grid';
+          if (viewerPeriod === 'month') {
+            rowEl.style.gridTemplateColumns = '74px 30px 30px 30px 1fr';
+          } else {
+            rowEl.style.gridTemplateColumns = '82px 36px 36px 36px 1fr';
+          }
+
+          const dateCell = document.createElement('div');
+          dateCell.className = `flex items-center cursor-pointer hover:underline select-none ${dateFontClass} ${dayClass}`;
+          dateCell.textContent = formattedDateLabel;
+          dateCell.title = "タップしてこの日の記録画面を開く";
+          dateCell.addEventListener('click', () => {
+            selectedDate = dateStr;
+            gridMode = 'standard';
+            localStorage.setItem(GRID_MODE_KEY, 'standard');
+            syncCurrentDateView();
+            syncCurrentViewMode();
+          });
+          rowEl.appendChild(dateCell);
+
+          const sleepCell = document.createElement('div');
+          sleepCell.className = `flex items-center justify-center ${statsFontClass}`;
+          sleepCell.textContent = stats.sleepHours > 0 ? `${stats.sleepHours}h` : '－';
+          rowEl.appendChild(sleepCell);
+
+          const wakeCell = document.createElement('div');
+          wakeCell.className = `flex items-center justify-center ${statsFontClass}`;
+          wakeCell.textContent = wakeLabel;
+          rowEl.appendChild(wakeCell);
+
+          const latencyCell = document.createElement('div');
+          latencyCell.className = `flex items-center justify-center ${statsFontClass}`;
+          latencyCell.textContent = latencyShortVal;
+          rowEl.appendChild(latencyCell);
+
+          const microGrid = document.createElement('div');
+          microGrid.className = gridPaddingClass;
+          microGrid.style.display = 'grid';
+          microGrid.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+
+          for (let i = 0; i < 24; i++) {
+            const slotIdx0 = i * 2;
+            const slotIdx1 = i * 2 + 1;
+            const val0 = dayRecord[slotIdx0] || null;
+            const val1 = dayRecord[slotIdx1] || null;
+
+            const hourSlotContainer = document.createElement('div');
+            hourSlotContainer.className = 'flex h-full w-full gap-[1px] px-[0.5px] items-stretch';
+
+            const bar0 = document.createElement('div');
+            bar0.className = `flex-1 h-full rounded-[1px] ${getViewerColor(val0)} transition-colors`;
+            bar0.style.minHeight = '100%';
+            bar0.title = `${i}:00`;
+
+            const bar1 = document.createElement('div');
+            bar1.className = `flex-1 h-full rounded-[1px] ${getViewerColor(val1)} transition-colors`;
+            bar1.style.minHeight = '100%';
+            bar1.title = `${i}:30`;
+
+            hourSlotContainer.appendChild(bar0);
+            hourSlotContainer.appendChild(bar1);
+            microGrid.appendChild(hourSlotContainer);
+          }
+          rowEl.appendChild(microGrid);
+          rowsContainer.appendChild(rowEl);
+        });
+        viewerRoot.appendChild(rowsContainer);
+
+        const footerLegend = document.createElement('div');
+        footerLegend.id = 'viewer-footer-legend';
+        footerLegend.className = `py-1.5 px-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 select-none text-[10px] font-extrabold tracking-wider shrink-0 border-t ${
+          displayMode === 'dark' ? 'bg-slate-900 border-t-slate-800 text-yellow-405 text-yellow-400' : 'bg-slate-50 border-t-gray-200 text-slate-500'
+        }`;
+
+        stamps.forEach((stamp, index) => {
+          let bgDot = 'bg-slate-500';
+          switch (stamp.color) {
+            case 'purple': bgDot = 'bg-purple-500'; break;
+            case 'sky': bgDot = 'bg-sky-400'; break;
+            case 'orange': bgDot = 'bg-orange-500'; break;
+            case 'yellow': bgDot = 'bg-yellow-400'; break;
+            case 'green': bgDot = 'bg-green-500'; break;
+            case 'pink': bgDot = 'bg-pink-500'; break;
+            case 'indigo': bgDot = 'bg-indigo-505 bg-indigo-500'; break;
+            case 'teal': bgDot = 'bg-teal-500'; break;
+            case 'rose': bgDot = 'bg-rose-500'; break;
+            case 'slate': bgDot = 'bg-slate-500'; break;
+          }
+
+          const legendItem = document.createElement('div');
+          legendItem.className = 'flex items-center gap-1';
+          legendItem.innerHTML = `
+            <span class="w-1.5 h-1.5 rounded-full ${bgDot}"></span>
+            <span>${stamp.name}</span>
+          `;
+          footerLegend.appendChild(legendItem);
+        });
+        viewerRoot.appendChild(footerLegend);
+
+        sleepViewerContainer.appendChild(viewerRoot);
+      }
+
+      // Main Grid Drawing
+      function renderGrid() {
+        const currentRecord = records[selectedDate] || createBlankRecord();
+        const body = document.getElementById('grid-content-body');
+        body.innerHTML = '';
+
+        // Dynamic creation of Row Header for Columns
+        const headerRow = document.createElement('div');
+        headerRow.className = `flex select-none flex-nowrap sticky top-0 z-20 text-center text-xs font-black antialiased border-b`;
+        
+        if (displayMode === 'dark') {
+          headerRow.className += ' bg-slate-900 border-slate-800 text-slate-300';
+        } else {
+          headerRow.className += ' bg-slate-50 border-gray-200 text-slate-700';
+        }
+
+        // Segment 1 header: Time label
+        const hTime = document.createElement('div');
+        hTime.className = `sticky left-0 z-30 w-16 min-w-[4rem] h-10 flex items-center justify-center shrink-0 font-black text-[14px] border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]`;
+        hTime.className += (displayMode === 'dark') ? ' bg-slate-900 border-slate-800 text-yellow-400' : ' bg-slate-100 border-gray-200 text-black';
+        hTime.textContent = '時間';
+        headerRow.appendChild(hTime);
+
+        // Segment 2 header: Sleep
+        const hSleep = document.createElement('div');
+        hSleep.className = `sticky left-16 z-25 w-14 min-w-[3.5rem] h-10 flex items-center justify-center shrink-0 text-[14.5px] font-black border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]`;
+        hSleep.className += (displayMode === 'dark') ? ' bg-slate-800 border-slate-800 text-sky-200' : ' bg-[#e0f2fe] border-gray-200 text-slate-700';
+        hSleep.textContent = '睡眠';
+        headerRow.appendChild(hSleep);
+
+        // Segment 3 header: Custom checklists
+        for (let c = 0; c < customColCount; c++) {
+          const name = customColNames[c] || `列${c+2}`;
+          const hCol = document.createElement('div');
+          hCol.className = `w-14 min-w-[3.5rem] h-10 flex items-center justify-center cursor-pointer border-r transition-colors text-center shrink-0 font-black select-none leading-tight breaking-all px-1`;
+          hCol.className += (displayMode === 'dark') ? ' bg-slate-900 hover:bg-slate-800 border-slate-800 text-sky-305' : ' bg-white hover:bg-gray-100 border-gray-200 text-slate-700';
+          
+          let fontSize = 'text-[14px]';
+          if (name.length >= 3) fontSize = 'text-[11.5px] leading-none';
+          if (name.length >= 5) fontSize = 'text-[9.5px] leading-tight font-sans tracking-tight';
+          hCol.className += ` ${fontSize}`;
+          hCol.textContent = name;
+          
+          hCol.addEventListener('click', () => openColumnConfigModal(c));
+          headerRow.appendChild(hCol);
+        }
+        body.appendChild(headerRow);
+
+        // Grid Data items
+        for (let slotIdx = 0; slotIdx < 48; slotIdx++) {
+          const rowIndex = Math.floor(slotIdx / 2);
+          const is30Min = slotIdx % 2 !== 0;
+          const isOddHour = rowIndex % 2 !== 0;
+
+          // Resolve Hour label depending on rep layout settings
+          let hourLabelVal = rowIndex;
+          if (hourRep === '1-24') {
+            hourLabelVal = rowIndex + 1;
+          }
+          const timeLabel = `${String(hourLabelVal).padStart(2, '0')}:${is30Min ? '30' : '00'}`;
+
+          const rowEl = document.createElement('div');
+          rowEl.className = "flex flex-nowrap h-7 items-stretch select-none";
+
+          // Time cell (Sticky left)
+          const timeCell = document.createElement('div');
+          timeCell.className = `sticky left-0 z-10 w-16 min-w-[4rem] h-full shrink-0 flex items-center justify-center text-[13px] sm:text-[14px] font-black font-sans shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r`;
+          if (displayMode === 'dark') {
+            timeCell.className += ` border-slate-800 text-yellow-400 ${isOddHour ? 'bg-[#13244a]' : 'bg-slate-950'}`;
+          } else {
+            timeCell.className += ` border-gray-200 text-black ${isOddHour ? 'bg-[#def2cc]' : 'bg-white'}`;
+          }
+          timeCell.textContent = timeLabel;
+          rowEl.appendChild(timeCell);
+
+          // Sleep Paint Column (with customized colors based on selected ID)
+          const sleepVal = currentRecord[slotIdx] || null;
+          const sleepCell = document.createElement('div');
+          sleepCell.className = `sticky left-16 z-10 w-14 min-w-[3.5rem] h-full shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r`;
+          sleepCell.className += (displayMode === 'dark') ? ' border-slate-810' : ' border-gray-200';
+
+          const matchingStamp = stamps.find(s => s.id === sleepVal);
+          if (matchingStamp) {
+            const clr = STAMP_COLORS[matchingStamp.color] || STAMP_COLORS.sky;
+            sleepCell.className += ` ${clr.bg} ${clr.hover}`;
+            
+            const txt = document.createElement('span');
+            txt.className = `text-[17px] sm:text-[19px] font-black leading-none text-center select-none ${clr.text}`;
+            txt.textContent = matchingStamp.name;
+            // Shorthand shrink if too long
+            if (matchingStamp.name.length > 2) {
+              txt.className += ' text-[10px] break-all tracking-tighter px-0.5';
+            }
+            sleepCell.appendChild(txt);
+          } else {
+            // Unpainted
+            if (displayMode === 'dark') {
+              sleepCell.className += ` ${isOddHour ? 'bg-[#13244a] hover:bg-[#1c3266]' : 'bg-slate-950 hover:bg-slate-900'}`;
+            } else {
+              sleepCell.className += ` ${isOddHour ? 'bg-[#def2cc] hover:bg-[#cfebb9]' : 'bg-white hover:bg-gray-50'}`;
+            }
+            sleepCell.innerHTML = `<span class="text-[9px] text-gray-300 font-extrabold select-none opacity-0 hover:opacity-100">+</span>`;
+          }
+
+          // Attach click/slide triggers to sleep cell
+          sleepCell.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (inputMethod === 'paint') {
+              isPointerDown = true;
+            }
+            handleCellInteractive(slotIdx, null);
+          });
+          
+          sleepCell.addEventListener('pointerenter', () => {
+            if (isPointerDown && inputMethod === 'paint') {
+              handleCellInteractive(slotIdx, null);
+            }
+          });
+
+          rowEl.appendChild(sleepCell);
+
+          // Activity custom columns
+          for (let c = 0; c < customColCount; c++) {
+            const customVal = (currentRecord.customCols && currentRecord.customCols[c]) ? currentRecord.customCols[c][slotIdx] : null;
+            const actCell = document.createElement('div');
+            actCell.className = `w-14 min-w-[3.5rem] h-full flex items-center justify-center cursor-pointer border-r transition-colors duration-100`;
+            actCell.className += (displayMode === 'dark') ? ' border-slate-800' : ' border-gray-150';
+
+            if (customVal) {
+              // Marked / Checked Style (Classic Solid Block indicator)
+              actCell.className += (displayMode === 'dark') ? ' bg-sky-500 hover:bg-sky-600' : ' bg-blue-600 hover:bg-blue-700';
+              actCell.innerHTML = `<span class="text-white font-black text-base sm:text-lg select-none">☑</span>`;
+            } else {
+              // Empty Slot Cell
+              if (displayMode === 'dark') {
+                actCell.className += ` ${isOddHour ? 'bg-[#13244a] hover:bg-[#1c3266]' : 'bg-slate-950 hover:bg-slate-900'}`;
+              } else {
+                actCell.className += ` ${isOddHour ? 'bg-[#def2cc] hover:bg-[#cfebb9]' : 'bg-white hover:bg-gray-50'}`;
+              }
+              actCell.innerHTML = `<span class="text-[9px] text-gray-300 font-extrabold select-none opacity-0 hover:opacity-100">.</span>`;
+            }
+
+            // Click listener for custom activity (no sliding paint to avoid accidental slide noise)
+            actCell.addEventListener('click', () => {
+              handleCellInteractive(slotIdx, c);
+            });
+
+            rowEl.appendChild(actCell);
+          }
+
+          body.appendChild(rowEl);
+        }
+
+        // Sync Memo textarea state
+        document.getElementById('memo-textarea').value = currentRecord.memo || '';
+      }
+
+      function handleCellInteractive(slotIdx, colIdx) {
+        if (!records[selectedDate]) {
+          records[selectedDate] = createBlankRecord();
+        }
+        const record = records[selectedDate];
+
+        if (colIdx === null || colIdx === undefined) {
+          // Editing standard Sleep Paint column
+          if (activeTool === 'eraser') {
+            record[slotIdx] = null;
+          } else {
+            record[slotIdx] = activeSymbol;
+          }
+        } else {
+          // Editing Custom Activity Column
+          if (!record.customCols) record.customCols = {};
+          if (!record.customCols[colIdx]) record.customCols[colIdx] = {};
+          
+          if (record.customCols[colIdx][slotIdx]) {
+            record.customCols[colIdx][slotIdx] = null;
+          } else {
+            record.customCols[colIdx][slotIdx] = activeSymbol || 'S';
+          }
+        }
+
+        saveRecords();
+        renderGrid();
+        updateAnalytics();
+      }
+
+      // 6. ANALYTICS & WEEKLY TIMELINE PLOTTER
+      function updateAnalytics() {
+        // Sync local stats blocks
+        const currentRecord = records[selectedDate] || createBlankRecord();
+        const stats = calculateStats(currentRecord);
+
+        document.getElementById('stat-sleep').textContent = `${stats.sleepHours}時間`;
+        document.getElementById('stat-inbed').textContent = `${stats.inBedHours}時間`;
+        document.getElementById('stat-wake').textContent = `${stats.wakeupCount}回`;
+        document.getElementById('stat-onset').textContent = stats.onsetStr;
+
+        // Render Recent Past Visual Timeline (7-day grid)
+        const timelineBox = document.getElementById('canvas-timeline-container');
+        timelineBox.innerHTML = '';
+
+        const pastDates = [];
+        for (let i = -6; i <= 0; i++) {
+          pastDates.push(shiftDateString(selectedDate, i));
+        }
+
+        // Track highest sleep hour to scale graph bars beautifully
+        let maxSleep = 4.0;
+        const mappedArray = pastDates.map((d) => {
+          const statsD = calculateStats(records[d] || createBlankRecord());
+          if (statsD.sleepHours > maxSleep) maxSleep = statsD.sleepHours;
+          return { date: d, sleep: statsD.sleepHours };
+        });
+
+        mappedArray.forEach((item) => {
+          const colWrapper = document.createElement('div');
+          colWrapper.className = "flex-1 flex flex-col items-center h-full justify-end cursor-pointer gap-1.5 select-none hover:scale-103 transition-transform";
+          
+          // Click bar takes user instantly to that date
+          colWrapper.addEventListener('click', () => {
+            selectedDate = item.date;
+            syncCurrentDateView();
+            showToast(`🗓️ ${formatDateLabel(item.date).date} に移動しました`);
+          });
+
+          // Height rendering ratio
+          const pct = Math.max(8, Math.round((item.sleep / maxSleep) * 80));
+          
+          const barEl = document.createElement('div');
+          barEl.className = `w-full rounded-t-lg transition-all duration-300 relative group flex justify-center`;
+          
+          if (item.date === selectedDate) {
+            barEl.className += (displayMode === 'dark') ? ' bg-sky-400' : ' bg-blue-600';
+          } else {
+            barEl.className += (displayMode === 'dark') ? ' bg-slate-700 hover:bg-slate-600' : ' bg-slate-200 hover:bg-slate-350';
+          }
+          barEl.style.height = `${pct}%`;
+
+          // Popover floating stats bubble on hover
+          const bubble = document.createElement('div');
+          bubble.className = "absolute -top-7 font-mono font-black text-[9px] bg-slate-800 text-white rounded px-1 py-0.5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow";
+          bubble.textContent = `${item.sleep}h`;
+          barEl.appendChild(bubble);
+
+          const dayLabel = document.createElement('div');
+          dayLabel.className = "text-[9px] font-extrabold font-mono text-slate-500 whitespace-nowrap tracking-tighter";
+          const dParts = item.date.split('-');
+          dayLabel.textContent = `${dParts[1]}/${dParts[2]}`;
+
+          colWrapper.appendChild(barEl);
+          colWrapper.appendChild(dayLabel);
+          timelineBox.appendChild(colWrapper);
+        });
+
+        // Load Full lists table index
+        renderHistoryTable();
+      }
+
+      function renderHistoryTable() {
+        const body = document.getElementById('history-table-body');
+        body.innerHTML = '';
+
+        const keys = Object.keys(records).sort((a,b) => b.localeCompare(a));
+        document.getElementById('history-total-count').textContent = `計 ${keys.length}日`;
+
+        if (keys.length === 0) {
+          body.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-400 font-medium">まだ睡眠データが登録されていません。上のタブから「記録」をはじめましょう！</td></tr>`;
+          return;
+        }
+
+        keys.forEach((k) => {
+          const tr = document.createElement('tr');
+          tr.className = `cursor-pointer transition-colors ${displayMode === 'dark' ? 'hover:bg-slate-900 border-slate-800' : 'hover:bg-slate-50'}`;
+          
+          const label = formatDateLabel(k);
+          const stats = calculateStats(records[k] || createBlankRecord());
+
+          tr.addEventListener('click', () => {
+            selectedDate = k;
+            // Switch back to record screen view
+            document.getElementById('tab-record').click();
+            syncCurrentDateView();
+            showToast(`🗓️ ${label.date} の編集へジャンプしました`);
+          });
+
+          // Date Cell
+          const tdDate = document.createElement('td');
+          tdDate.className = "p-2.5 font-bold whitespace-nowrap";
+          tdDate.innerHTML = `<span class="font-mono text-slate-900 ${displayMode === 'dark' ? 'text-white' : ''}">${label.date}</span> <span class="text-slate-500 text-[10.5px]">${label.day}</span>`;
+          tr.appendChild(tdDate);
+
+          // Sleep Hours Cell
+          const tdSleep = document.createElement('td');
+          tdSleep.className = "p-2.5 font-extrabold font-mono text-blue-600";
+          tdSleep.textContent = `${stats.sleepHours}h`;
+          tr.appendChild(tdSleep);
+
+          // Onset Latency Cell
+          const tdOnset = document.createElement('td');
+          tdOnset.className = "p-2.5 font-extrabold text-slate-500";
+          tdOnset.textContent = stats.onsetStr;
+          tr.appendChild(tdOnset);
+
+          // Memo Snippet
+          const tdMemo = document.createElement('td');
+          tdMemo.className = "p-2.5 font-medium text-slate-650 max-w-[120px] truncate text-[11px] font-sans";
+          tdMemo.textContent = records[k].memo || '－';
+          tr.appendChild(tdMemo);
+
+          body.appendChild(tr);
+        });
+      }
+
+      function syncCurrentDateView() {
+        const label = formatDateLabel(selectedDate);
+        document.getElementById('date-display').textContent = label.date;
+        document.getElementById('weekday-display').textContent = label.day;
+        document.getElementById('native-date-picker').value = selectedDate;
+        
+        if (gridMode === 'viewer') {
+          renderViewer();
+        } else {
+          renderGrid();
+        }
+        updateAnalytics();
+      }
+
+      function updateFooterStatus() {
+        updateFooterStorageText();
+      }
+
+      // 7. BACKUPS & DATA CONVERTERS
+      // CSV Exporter API
+      function generateCSVData() {
+        const headers = ['日付', '曜日', '時間枠', '記号', '意味', ...customColNames];
+        const lines = [headers.map(h => `"${h}"`).join(',')];
+        const days = ['日', '月', '火', '水', '木', '金', '土'];
+
+        const sortedKeys = Object.keys(records).sort((a,b) => a.localeCompare(b));
+        sortedKeys.forEach((dateStr) => {
+          const rec = records[dateStr] || createBlankRecord();
+          const dObj = new Date(dateStr);
+          const wDay = isNaN(dObj.getTime()) ? '' : days[dObj.getDay()];
+
+          for (let h = 0; h < 24; h++) {
+            const hLabel = String(h).padStart(2, '0');
+
+            // helper for symbol meanings
+            const getMeaning = (symbol) => {
+              if (!symbol) return '';
+              const st = stamps.find(s => s.id === symbol);
+              return st ? st.name : '';
+            };
+
+            // 00 min block
+            const sym0 = rec[h * 2] || '';
+            const meaning0 = getMeaning(sym0);
+            const custom0 = customColNames.map((_, idx) => {
+              const val = (rec.customCols && rec.customCols[idx]) ? rec.customCols[idx][h * 2] || '' : '';
+              return `"${val}"`;
+            });
+            lines.push([
+              `"${dateStr}"`, `"${wDay}"`, `"${hLabel}時00分"`, `"${sym0}"`, `"${meaning0}"`, ...custom0
+            ].join(','));
+
+            // 30 min block
+            const sym30 = rec[h * 2 + 1] || '';
+            const meaning30 = getMeaning(sym30);
+            const custom30 = customColNames.map((_, idx) => {
+              const val = (rec.customCols && rec.customCols[idx]) ? rec.customCols[idx][h * 2 + 1] || '' : '';
+              return `"${val}"`;
+            });
+            lines.push([
+              `"${dateStr}"`, `"${wDay}"`, `"${hLabel}時30分"`, `"${sym30}"`, `"${meaning30}"`, ...custom30
+            ].join(','));
+          }
+        });
+
+        return lines.join('\r\n');
+      }
+
+      // Download CSV physically with BOM
+      function exportCSV() {
+        const text = generateCSVData();
+        const csvContent = '\uFEFF' + text;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `睡眠記録_高度バックアップ.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('📁 CSVファイルを書き出しました！');
+      }
+
+      // Parser for CSV importing
+      function importCSV(csvText) {
+        const clean = csvText.replace(/^\uFEFF/, '');
+        const rows = clean.split(/\r?\n/);
+        if (rows.length < 2) return false;
+
+        const headers = rows[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+        const importedCols = [];
+        if (headers.length > 5) {
+          for (let c = 5; c < headers.length; c++) {
+            importedCols.push(headers[c]);
+          }
+        }
+
+        const parsedRecords = {};
+
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i].trim();
+          if (!row) continue;
+
+          const parts = row.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
+          if (parts.length < 4) continue;
+
+          const [dateStr, , timeStr, symbol] = parts;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue;
+
+          const timeMatch = timeStr.match(/(\d+)時(\d+)分/);
+          if (!timeMatch) continue;
+
+          const hour = parseInt(timeMatch[1], 10);
+          const min = parseInt(timeMatch[2], 10);
+          if (isNaN(hour) || isNaN(min)) continue;
+
+          const slotIdx = hour * 2 + (min === 30 ? 1 : 0);
+
+          if (!parsedRecords[dateStr]) {
+            parsedRecords[dateStr] = createBlankRecord();
+          }
+
+          // Assign slot sleep value if defined
+          if (symbol) {
+            parsedRecords[dateStr][slotIdx] = symbol;
+          }
+
+          // Custom column indicators
+          if (importedCols.length > 0) {
+            if (!parsedRecords[dateStr].customCols) parsedRecords[dateStr].customCols = {};
+            for (let c = 0; c < importedCols.length; c++) {
+              const partIdx = 5 + c;
+              if (partIdx < parts.length) {
+                const val = parts[partIdx];
+                if (val) {
+                  if (!parsedRecords[dateStr].customCols[c]) parsedRecords[dateStr].customCols[c] = {};
+                  parsedRecords[dateStr].customCols[c][slotIdx] = val;
+                }
+              }
+            }
+          }
+        }
+
+        if (Object.keys(parsedRecords).length === 0) return false;
+
+        // Perform merge
+        records = { ...records, ...parsedRecords };
+        saveRecords();
+
+        if (importedCols.length > 0) {
+          customColCount = importedCols.length;
+          customColNames = importedCols;
+          saveColConfig();
+          document.getElementById('select-col-count').value = String(customColCount);
+        }
+
+        syncCurrentDateView();
+        return true;
+      }
+
+      // JSON backup
+      function exportJSON() {
+        const payload = {
+          records,
+          hourRep,
+          customColCount,
+          customColNames,
+          stamps,
+          lastBackupAt: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `睡眠記録バックアップ_FULL.json`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('📁 JSONフルバックアップを書き出しました！');
+      }
+
+      function importJSON(jsonText) {
+        try {
+          const payload = JSON.parse(jsonText);
+          if (!payload || !payload.records) {
+            return false;
+          }
+          records = payload.records;
+          saveRecords();
+
+          if (payload.stamps) {
+            stamps = payload.stamps;
+            saveStamps();
+            renderPalette();
+          }
+          if (payload.customColCount !== undefined) {
+            customColCount = payload.customColCount;
+            customColNames = payload.customColNames || loadColNames(customColCount);
+            saveColConfig();
+            document.getElementById('select-col-count').value = String(customColCount);
+          }
+          if (payload.hourRep) {
+            hourRep = payload.hourRep;
+            localStorage.setItem(HOUR_REP_KEY, hourRep);
+            document.getElementById(hourRep === '0-23' ? 'hour-format-023' : 'hour-format-124').click();
+          }
+
+          syncCurrentDateView();
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      // 8. GOOGLE DRIVE BACKUPS INTEGRATION
+      async function setupGoogleDriveSync() {
+        try {
+          const response = await fetch('/firebase-applet-config.json');
+          if (!response.ok) throw new Error('No config');
+          firebaseConfig = await response.json();
+          
+          // Compat SDK setup
+          firebaseApp = firebase.initializeApp(firebaseConfig);
+          firebaseAuth = firebase.auth();
+
+          // Listen to Auth State
+          firebaseAuth.onAuthStateChanged(async (user) => {
+            if (user) {
+              userProfile = user;
+              document.getElementById('gdrive-status').textContent = `ドライブ連携: 接続済 (${user.displayName || user.email})`;
+              document.getElementById('gdrive-status').className = "text-[10px] text-emerald-400 font-bold";
+              await renderDriveActionsSection(true);
+            } else {
+              userProfile = null;
+              driveAccessToken = null;
+              document.getElementById('gdrive-status').textContent = `ドライブ連携: 未接続`;
+              document.getElementById('gdrive-status').className = "text-[10px] text-gray-400";
+              await renderDriveActionsSection(false);
+            }
+          });
+        } catch (e) {
+          console.warn('Google Drive config fetch failed (offline file:// protocol mode fallback active).');
+          document.getElementById('gdrive-status').textContent = `ドライブ連携: オフライン(ローカル起動中)`;
+          document.getElementById('gdrive-status').className = "text-[10px] text-orange-400 font-bold";
+          renderDriveActionsSection(false, true);
+        }
+      }
+
+      async function renderDriveActionsSection(isConnected, isOffline = false) {
+        const sec = document.getElementById('gdrive-actions-section');
+        sec.innerHTML = '';
+
+        if (isOffline) {
+          sec.innerHTML = `<div class="p-2 bg-amber-50 text-amber-800 text-[10px] font-bold rounded-lg leading-relaxed">
+            ※ダブルクリックで index.html を起動した場合、セキュリティ制限のためGoogleアカウントの直接ログインはオフラインモードとしてスキップされます。データの保護には「JSONファイルを書き出す」をご活用ください。
+          </div>`;
+          return;
+        }
+
+        if (!isConnected) {
+          const btn = document.createElement('button');
+          btn.className = "w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-1.5 cursor-pointer font-bold transition-all";
+          btn.innerHTML = `<i data-lucide="log-in" class="w-3.5 h-3.5"></i> <span>Googleアカウントを連携する</span>`;
+          btn.addEventListener('click', async () => {
+            try {
+              const provider = new firebase.auth.GoogleAuthProvider();
+              provider.addScope('https://www.googleapis.com/auth/drive.appdata');
+              provider.addScope('https://www.googleapis.com/auth/drive.file');
+              
+              const result = await firebaseAuth.signInWithPopup(provider);
+              driveAccessToken = result.credential.accessToken;
+              showToast('🔑 Google連携に成功しました！');
+            } catch (err) {
+              console.error(err);
+              showToast('❌ Google連携に失敗しました');
+            }
+          });
+          sec.appendChild(btn);
+          lucide.createIcons();
+        } else {
+          // Connected - Actions details
+          sec.innerHTML = `
+            <div class="flex flex-col gap-1 text-[11px] bg-white border p-2.5 rounded-xl font-medium text-slate-705">
+              <div>👤 ユーザ: <strong>${userProfile.displayName || userProfile.email}</strong></div>
+              <div id="drive-remote-info" class="text-gray-400 text-[10px] mt-0.5">オンラインバックアップを検索中...</div>
+            </div>
+            <button id="btn-drive-upload" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center justify-center gap-1 cursor-pointer font-bold">
+              <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i> <span>Driveへ今すぐバックアップ</span>
+            </button>
+            <button id="btn-drive-download" class="w-full py-2 bg-slate-100 hover:bg-slate-205 text-slate-755 rounded-xl flex items-center justify-center gap-1 cursor-pointer font-bold border">
+              <i data-lucide="cloud-download" class="w-3.5 h-3.5"></i> <span>Driveからデータを復元</span>
+            </button>
+            <button id="btn-gdrive-logout" class="w-full py-1 text-center text-slate-400 hover:text-rose-500 font-bold transition-colors cursor-pointer text-[10.5px]">
+              連携を解除 (ログアウト)
+            </button>
+          `;
+          lucide.createIcons();
+
+          // Action bindings
+          document.getElementById('btn-gdrive-logout').addEventListener('click', async () => {
+            await firebaseAuth.signOut();
+            showToast('🚪 連携を解除しました');
+          });
+
+          document.getElementById('btn-drive-upload').addEventListener('click', async () => {
+            try {
+              showToast('☁️ クラウドへ送信中...');
+              await uploadBackupToDrive();
+            } catch (e) {
+              showToast('❌ 同期アップロードに失敗しました');
+            }
+          });
+
+          document.getElementById('btn-drive-download').addEventListener('click', async () => {
+            try {
+              showToast('☁️ クラウドからダウンロード中...');
+              await downloadBackupFromDrive();
+            } catch (e) {
+              showToast('❌ 同期ダウンロードに失敗しました');
+            }
+          });
+
+          // Fetch list info
+          await queryDriveFileStatus();
+        }
+      }
+
+      async function queryDriveFileStatus() {
+        if (!firebaseAuth.currentUser) return;
+        try {
+          if (!driveAccessToken) {
+            // Re-acquire fresh credentials silently
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.addScope('https://www.googleapis.com/auth/drive.appdata');
+            provider.addScope('https://www.googleapis.com/auth/drive.file');
+            // triggers popup if session stale, let's keep it safe
+          }
+          
+          const query = encodeURIComponent("name contains 'バックアップ_'");
+          const url = `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${query}&orderBy=name+desc&fields=files(id,name,createdTime)`;
+          
+          let tokenToUse = driveAccessToken;
+          if (!tokenToUse) {
+            // fallback token or trigger silent acquisition
+            document.getElementById('drive-remote-info').textContent = "クラウド接続確認済。バックアップ可能です。";
+            return;
+          }
+
+          const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${tokenToUse}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const files = data.files || [];
+            if (files.length > 0) {
+              const latest = files[0];
+              const displayDate = latest.name.replace('バックアップ_', '').replace('.json', '');
+              document.getElementById('drive-remote-info').textContent = `最新セーブ: ${displayDate.slice(0,4)}/${displayDate.slice(4,6)}/${displayDate.slice(6,8)} ${displayDate.slice(8,10)}:${displayDate.slice(10,12)}`;
+            } else {
+              document.getElementById('drive-remote-info').textContent = "クラウド保管庫: まだバックアップがありません";
+            }
+          }
+        } catch (e) {
+          document.getElementById('drive-remote-info').textContent = "クラウド接続確認済。バックアップ可能です。";
+        }
+      }
+
+      async function uploadBackupToDrive() {
+        const token = driveAccessToken;
+        if (!token) {
+          showToast('🔑 先に再ログインをしてください');
+          return;
+        }
+
+        const payload = {
+          records,
+          hourRep,
+          customColCount,
+          customColNames,
+          stamps,
+          lastBackupAt: new Date().toISOString()
+        };
+
+        const d = new Date();
+        const jstOffset = 9 * 3600 * 1000;
+        const jstDate = new Date(d.getTime() + (d.getTimezoneOffset() * 60000) + jstOffset);
+        const formatName = `バックアップ_${jstDate.getFullYear()}${String(jstDate.getMonth()+1).padStart(2,'0')}${String(jstDate.getDate()).padStart(2,'0')}${String(jstDate.getHours()).padStart(2,'0')}${String(jstDate.getMinutes()).padStart(2,'0')}.json`;
+
+        // 1. Create file metadata
+        const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: formatName,
+            parents: ['appDataFolder']
+          })
+        });
+
+        if (!metaRes.ok) throw new Error();
+        const meta = await metaRes.json();
+        const fileId = meta.id;
+
+        // 2. Upload media
+        const uploadRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=UTF-8'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (uploadRes.ok) {
+          showToast('☁️ クラウド同期データを保存しました！');
+          await queryDriveFileStatus();
+        } else {
+          throw new Error();
+        }
+      }
+
+      async function downloadBackupFromDrive() {
+        const token = driveAccessToken;
+        if (!token) {
+          showToast('🔑 先にログインをしてください');
+          return;
+        }
+
+        const query = encodeURIComponent("name contains 'バックアップ_'");
+        const listUrl = `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${query}&orderBy=name+desc&fields=files(id,name)`;
+        
+        const listRes = await fetch(listUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!listRes.ok) throw new Error();
+        
+        const listData = await listRes.json();
+        const files = listData.files || [];
+        if (files.length === 0) {
+          showToast('⚠️ 復元できるバックアップがクラウドに見つかりません');
+          return;
+        }
+
+        const fileId = files[0].id;
+        const contentUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+        const contentRes = await fetch(contentUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!contentRes.ok) throw new Error();
+        const payload = await contentRes.json();
+
+        if (payload && payload.records) {
+          records = payload.records;
+          saveRecords();
+          if (payload.stamps) {
+            stamps = payload.stamps;
+            saveStamps();
+            renderPalette();
+          }
+          if (payload.customColCount !== undefined) {
+            customColCount = payload.customColCount;
+            customColNames = payload.customColNames || loadColNames(customColCount);
+            saveColConfig();
+          }
+          syncCurrentDateView();
+          showToast('☁️ クラウドからデータを100%復元しました！');
+        }
+      }
+
+      // 9. MODALS MANAGER
+      let editingStampIndex = null;
+      function openStampConfigModal(idx) {
+        editingStampIndex = idx;
+        const st = stamps[idx];
+        
+        document.getElementById('stamp-edit-title').textContent = `スタンプ「${st.name}」の設定変更`;
+        document.getElementById('stamp-edit-name').value = st.name;
+        document.getElementById('stamp-edit-symbol').value = st.symbol;
+
+        // Load colors palette
+        const box = document.getElementById('grid-stamp-colors');
+        box.innerHTML = '';
+        Object.keys(STAMP_COLORS).forEach((colorName) => {
+          const tile = document.createElement('button');
+          tile.className = `w-7 h-7 rounded-lg cursor-pointer ${STAMP_COLORS[colorName].bg} border-2 hover:scale-105 transition-all`;
+          
+          if (st.color === colorName) {
+            tile.classList.add('border-black', 'scale-105');
+          } else {
+            tile.classList.add('border-transparent');
+          }
+
+          tile.addEventListener('click', () => {
+            box.querySelectorAll('button').forEach(b => b.className = b.className.replace('border-black', 'border-transparent'));
+            tile.classList.add('border-black');
+            st.color = colorName;
+          });
+          box.appendChild(tile);
+        });
+
+        document.getElementById('stamps-config-modal').classList.remove('hidden');
+      }
+
+      function closeStampConfigModal() {
+        document.getElementById('stamps-config-modal').classList.add('hidden');
+        editingStampIndex = null;
+      }
+
+      let editingColumnIndex = null;
+      function openColumnConfigModal(idx) {
+        editingColumnIndex = idx;
+        const name = customColNames[idx] || `列${idx+2}`;
+        document.getElementById('column-edit-name').value = name;
+        document.getElementById('column-edit-action').value = 'keep';
+        document.getElementById('column-config-modal').classList.remove('hidden');
+      }
+
+      function closeColumnConfigModal() {
+        document.getElementById('column-config-modal').classList.add('hidden');
+        editingColumnIndex = null;
+      }
+
+      // 10. EVENTS AND BINDINGS INITIALIZATION
+      function setupBindings() {
+        // Tab click bindings
+        document.getElementById('tab-record').addEventListener('click', () => {
+          document.getElementById('tab-record').className = "px-2.5 py-1.5 rounded-lg font-bold transition-all bg-blue-600 text-white shadow-sm cursor-pointer";
+          document.getElementById('tab-chart').className = "px-2.5 py-1.5 rounded-lg font-bold transition-all bg-gray-100 text-slate-700 hover:bg-gray-200 cursor-pointer";
+          document.getElementById('view-record').classList.remove('hidden');
+          document.getElementById('view-record').classList.add('flex');
+          document.getElementById('view-chart').classList.add('hidden');
+          renderGrid();
+        });
+
+        document.getElementById('tab-chart').addEventListener('click', () => {
+          document.getElementById('tab-chart').className = "px-2.5 py-1.5 rounded-lg font-bold transition-all bg-blue-600 text-white shadow-sm cursor-pointer";
+          document.getElementById('tab-record').className = "px-2.5 py-1.5 rounded-lg font-bold transition-all bg-gray-100 text-slate-700 hover:bg-gray-200 cursor-pointer";
+          document.getElementById('view-record').classList.add('hidden');
+          document.getElementById('view-record').classList.remove('flex');
+          document.getElementById('view-chart').classList.remove('hidden');
+          updateAnalytics();
+        });
+
+        // Left Sidebar drawers togglers
+        const overlay = document.getElementById('sidebar-overlay');
+        const drawer = document.getElementById('sidebar-drawer');
+        
+        document.getElementById('sidebar-toggle-btn').addEventListener('click', () => {
+          overlay.classList.remove('pointer-events-none');
+          overlay.classList.add('opacity-100');
+          drawer.classList.remove('-translate-x-full');
+        });
+
+        const closeSidebar = () => {
+          overlay.classList.add('pointer-events-none');
+          overlay.classList.remove('opacity-100');
+          drawer.classList.add('-translate-x-full');
+        };
+
+        document.getElementById('sidebar-close-btn').addEventListener('click', closeSidebar);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) closeSidebar();
+        });
+
+        // Native Pickers Date Synchronization
+        document.getElementById('native-date-picker').addEventListener('change', (e) => {
+          if (e.target.value) {
+            selectedDate = e.target.value;
+            syncCurrentDateView();
+          }
+        });
+
+        document.getElementById('prev-day-btn').addEventListener('click', () => {
+          selectedDate = shiftDateString(selectedDate, -1);
+          syncCurrentDateView();
+        });
+
+        document.getElementById('next-day-btn').addEventListener('click', () => {
+          selectedDate = shiftDateString(selectedDate, 1);
+          syncCurrentDateView();
+        });
+
+        // Display Mode / Settings items bindings
+        document.getElementById('theme-vivid').addEventListener('click', () => {
+          displayMode = 'vivid';
+          localStorage.setItem(DISPLAY_MODE_KEY, 'vivid');
+          updateDisplayThemesToggles();
+          updateDisplayStyles();
+          syncCurrentViewMode();
+        });
+        document.getElementById('theme-soft').addEventListener('click', () => {
+          displayMode = 'soft';
+          localStorage.setItem(DISPLAY_MODE_KEY, 'soft');
+          updateDisplayThemesToggles();
+          updateDisplayStyles();
+          syncCurrentViewMode();
+        });
+        document.getElementById('theme-dark').addEventListener('click', () => {
+          displayMode = 'dark';
+          localStorage.setItem(DISPLAY_MODE_KEY, 'dark');
+          updateDisplayThemesToggles();
+          updateDisplayStyles();
+          syncCurrentViewMode();
+        });
+
+        function updateDisplayThemesToggles() {
+          const v = document.getElementById('theme-vivid');
+          const s = document.getElementById('theme-soft');
+          const d = document.getElementById('theme-dark');
+          [v,s,d].forEach(btn => btn.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10px] transition-all hover:bg-white cursor-pointer text-slate-500");
+          if (displayMode === 'vivid') {
+            v.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10px] transition-all bg-white shadow-sm hover:bg-white border cursor-pointer border-blue-200 text-blue-700";
+          } else if (displayMode === 'soft') {
+            s.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10px] transition-all bg-white shadow-sm hover:bg-white border cursor-pointer border-green-250 text-green-700";
+          } else if (displayMode === 'dark') {
+            d.className = "py-2 px-1 text-center font-extrabold rounded-lg text-[10px] transition-all bg-slate-950 border border-slate-800 shadow-sm cursor-pointer text-sky-400";
+          }
+        }
+        updateDisplayThemesToggles();
+
+        // 1.5 View Mode Selector Toggle Buttons Bindings
+        const btnStandard = document.getElementById('view-mode-standard');
+        const btnViewer = document.getElementById('view-mode-viewer');
+        const btnViewerClose = document.getElementById('viewer-close-btn');
+
+        const setGridModeDisplay = (val) => {
+          gridMode = val;
+          localStorage.setItem(GRID_MODE_KEY, val);
+          syncCurrentViewMode();
+        };
+
+        if (btnStandard) {
+          btnStandard.addEventListener('click', () => {
+            setGridModeDisplay('standard');
+            showToast('📝 記録画面に切り替えました');
+          });
+        }
+        if (btnViewer) {
+          btnViewer.addEventListener('click', () => {
+            setGridModeDisplay('viewer');
+            showToast('📊 閲覧専用ビュアーに切り替えました');
+          });
+        }
+        if (btnViewerClose) {
+          btnViewerClose.addEventListener('click', () => {
+            setGridModeDisplay('standard');
+            showToast('🕒 記録画面に戻りました');
+          });
+        }
+
+        // 24 hour toggle helper
+        const btn023 = document.getElementById('hour-format-023');
+        const btn124 = document.getElementById('hour-format-124');
+        const setHourRepDisplay = (val) => {
+          hourRep = val;
+          localStorage.setItem(HOUR_REP_KEY, val);
+          [btn023, btn124].forEach(b => b.className = "py-2 px-1 text-center rounded-lg text-[10.5px] transition-all cursor-pointer text-slate-500");
+          if (val === '0-23') {
+            btn023.className = "py-2 px-1 text-center rounded-lg text-[10.5px] transition-all bg-white shadow-sm cursor-pointer text-slate-700 font-extrabold";
+          } else {
+            btn124.className = "py-2 px-1 text-center rounded-lg text-[10.5px] transition-all bg-white shadow-sm cursor-pointer text-slate-700 font-extrabold";
+          }
+          renderGrid();
+        };
+        btn023.addEventListener('click', () => setHourRepDisplay('0-23'));
+        btn124.addEventListener('click', () => setHourRepDisplay('1-24'));
+        setHourRepDisplay(hourRep);
+
+        // Input Tool Toggle
+        const tapBtn = document.getElementById('input-tool-tap');
+        const paintBtn = document.getElementById('input-tool-paint');
+        const setInputMethodDisplay = (val) => {
+          inputMethod = val;
+          localStorage.setItem(INPUT_METHOD_KEY, val);
+          [tapBtn, paintBtn].forEach(b => b.className = "py-2 px-1 text-center rounded-lg text-[10.5px] transition-all cursor-pointer text-slate-500");
+          if (val === 'stamp') {
+            tapBtn.className = "py-2 px-1 text-center rounded-lg text-[10.5px] transition-all bg-white shadow-sm cursor-pointer text-slate-700 font-extrabold";
+          } else {
+            paintBtn.className = "py-2 px-1 text-center rounded-lg text-[10.5px] transition-all bg-white shadow-sm cursor-pointer text-slate-700 font-extrabold";
+          }
+          renderGrid();
+        };
+        tapBtn.addEventListener('click', () => setInputMethodDisplay('stamp'));
+        paintBtn.addEventListener('click', () => setInputMethodDisplay('paint'));
+        setInputMethodDisplay(inputMethod);
+
+        // Eraser button
+        document.getElementById('btn-eraser').addEventListener('click', () => {
+          activeTool = (activeTool === 'eraser') ? 'stamp' : 'eraser';
+          renderPalette();
+        });
+
+        // Copy / Clear controls
+        document.getElementById('btn-copy-prev').addEventListener('click', () => {
+          const prevDate = shiftDateString(selectedDate, -1);
+          const prevRec = records[prevDate];
+          if (!prevRec) {
+            showToast('⚠️ 前日の記録が見つかりません');
+            return;
+          }
+          records[selectedDate] = JSON.parse(JSON.stringify(prevRec));
+          saveRecords();
+          syncCurrentDateView();
+          showToast('📋 前日の記録を丸ごとコピーしました！');
+        });
+
+        document.getElementById('btn-clear-today').addEventListener('click', () => {
+          if (confirm('今日の記録をすべてクリアしますか？')) {
+            records[selectedDate] = createBlankRecord();
+            saveRecords();
+            syncCurrentDateView();
+            showToast('🔄 今日の記録をクリアしました');
+          }
+        });
+
+        // Memo save
+        document.getElementById('memo-textarea').addEventListener('input', (e) => {
+          if (!records[selectedDate]) records[selectedDate] = createBlankRecord();
+          records[selectedDate].memo = e.target.value;
+          saveRecords();
+          // Delayed update footer
+          updateFooterStorageText();
+        });
+
+        // File JSON backups actions
+        document.getElementById('btn-export-json').addEventListener('click', exportJSON);
+        document.getElementById('input-json-file').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            const success = importJSON(evt.target.result);
+            if (success) {
+              showToast('✅ JSONバックアップを復元しました！');
+              closeSidebar();
+            } else {
+              showToast('❌ JSONファイルの解析に失敗しました');
+            }
+          };
+          reader.readAsText(file);
+        });
+
+        // CSV backups
+        document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
+        document.getElementById('input-csv-file').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            const success = importCSV(evt.target.result);
+            if (success) {
+              showToast('✅ CSVファイルをインポートしました！');
+              closeSidebar();
+            } else {
+              showToast('❌ CSVファイルの解析に失敗しました');
+            }
+          };
+          reader.readAsText(file);
+        });
+
+        // Drag slide paint handle document releases
+        document.addEventListener('pointerup', () => {
+          isPointerDown = false;
+        });
+
+        // Stamps configuration modal saves
+        document.getElementById('btn-close-stamps-modal').addEventListener('click', closeStampConfigModal);
+        document.getElementById('stamp-save-btn').addEventListener('click', () => {
+          if (editingStampIndex === null) return;
+          const target = stamps[editingStampIndex];
+          target.name = document.getElementById('stamp-edit-name').value;
+          target.symbol = document.getElementById('stamp-edit-symbol').value;
+          saveStamps();
+          renderPalette();
+          renderGrid();
+          closeStampConfigModal();
+          showToast('✅ スタンプを設定しました');
+        });
+
+        // Custom columns settings drop box
+        const colSelect = document.getElementById('select-col-count');
+        colSelect.value = String(customColCount);
+        colSelect.addEventListener('change', (e) => {
+          const nextVal = parseInt(e.target.value, 10);
+          if (!isNaN(nextVal)) {
+            customColCount = nextVal;
+            customColNames = loadColNames(customColCount);
+            saveColConfig();
+            renderGrid();
+            showToast(`📊 記録項目数を ${nextVal}列 に設定しました`);
+          }
+        });
+
+        // Custom column save modal details
+        document.getElementById('btn-close-column-modal').addEventListener('click', closeColumnConfigModal);
+        document.getElementById('column-save-btn').addEventListener('click', () => {
+          if (editingColumnIndex === null) return;
+          const newName = document.getElementById('column-edit-name').value;
+          const action = document.getElementById('column-edit-action').value;
+
+          if (action === 'clear') {
+            // Delete all historic events for this column idx
+            Object.keys(records).forEach((k) => {
+              if (records[k].customCols) delete records[k].customCols[editingColumnIndex];
+            });
+            saveRecords();
+            customColNames[editingColumnIndex] = newName;
+            showToast('🗑️ 列データを初期化して項目名を変更しました');
+          } else if (action === 'archive') {
+            // Push old data to a new final column index
+            const archiveIdx = customColCount;
+            customColCount++;
+            localStorage.setItem(COL_COUNT_KEY, String(customColCount));
+            document.getElementById('select-col-count').value = String(customColCount);
+
+            const oldName = customColNames[editingColumnIndex];
+            customColNames.push(oldName);
+            customColNames[editingColumnIndex] = newName;
+
+            Object.keys(records).forEach((k) => {
+              if (records[k].customCols) {
+                const data = records[k].customCols[editingColumnIndex];
+                if (data) {
+                  records[k].customCols[archiveIdx] = data;
+                  delete records[k].customCols[editingColumnIndex];
+                }
+              }
+            });
+            saveRecords();
+            showToast('📦 列データを安全に末尾に退避し、新規項目を開始しました！');
+          } else {
+            customColNames[editingColumnIndex] = newName;
+            showToast('✅ 項目名を変更しました（データは引き継がれます）');
+          }
+
+          saveColConfig();
+          renderGrid();
+          closeColumnConfigModal();
+        });
+
+        // Column Swapping Actions
+        document.getElementById('btn-column-swap').addEventListener('click', () => {
+          if (editingColumnIndex === null) return;
+          const nextIdx = editingColumnIndex + 1;
+          if (nextIdx >= customColCount) {
+            showToast('⚠️ この列の右隣に交換先がありません');
+            return;
+          }
+
+          // Swap names
+          const tmpName = customColNames[editingColumnIndex];
+          customColNames[editingColumnIndex] = customColNames[nextIdx];
+          customColNames[nextIdx] = tmpName;
+
+          // Swap data keys
+          Object.keys(records).forEach((k) => {
+            if (records[k].customCols) {
+              const dataA = records[k].customCols[editingColumnIndex];
+              const dataB = records[k].customCols[nextIdx];
+              records[k].customCols[editingColumnIndex] = dataB || null;
+              records[k].customCols[nextIdx] = dataA || null;
+            }
+          });
+
+          saveRecords();
+          saveColConfig();
+          renderGrid();
+          closeColumnConfigModal();
+          showToast('🔄 列の位置を入れ替えました！');
+        });
+
+        // Factory reset actions
+        document.getElementById('btn-factory-reset').addEventListener('click', () => {
+          if (confirm('【警告・注意】すべての睡眠記録、スタンプ構成、項目名を削除して完全工場出荷状態にリセットします。本当によろしいですか？')) {
+            localStorage.clear();
+            records = {};
+            stamps = DEFAULT_STAMPS;
+            customColCount = 3;
+            customColNames = loadColNames(3);
+            selectedDate = getLocalDateString(new Date());
+            
+            showToast('✨ アプリを完全初期化しました');
+            window.location.reload();
+          }
+        });
+
+        // Quick PC Keyboard Shortcuts Binding
+        document.addEventListener('keydown', (e) => {
+          // Avoid shortcuts when typing inside form elements
+          if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+          if (e.key === 'ArrowLeft') {
+            selectedDate = shiftDateString(selectedDate, -1);
+            syncCurrentDateView();
+          } else if (e.key === 'ArrowRight') {
+            selectedDate = shiftDateString(selectedDate, 1);
+            syncCurrentDateView();
+          } else if (e.key === ' ') {
+            e.preventDefault();
+            selectedDate = getLocalDateString(new Date());
+            syncCurrentDateView();
+            showToast('🗓️ 今日の日付にジャンプしました');
+          } else if (e.key === 'e' || e.key === 'E') {
+            document.getElementById('btn-eraser').click();
+          } else {
+            // Digits trigger palette quick indices
+            const num = parseInt(e.key, 10);
+            if (!isNaN(num) && num >= 1 && num <= stamps.length) {
+              const targetStIdx = num - 1;
+              activeTool = 'stamp';
+              activeSymbol = stamps[targetStIdx].id;
+              renderPalette();
+              showToast(`🎯 スタンプ「${stamps[targetStIdx].name}」を選択`);
+            }
+          }
+        });
+      }
+
+      // 11. BOOTSTRAPPING
+      window.addEventListener('DOMContentLoaded', async () => {
+        // Build initial visuals
+        updateDisplayStyles();
+        renderPalette();
+        syncCurrentDateView();
+        syncCurrentViewMode();
+        setupBindings();
+        
+        // Setup cloud sync options via gapi compat auth handler
+        await setupGoogleDriveSync();
+
+        // Register custom Lucide vector elements
+        lucide.createIcons();
+      });
+    </script>
+  </body>
+</html>
