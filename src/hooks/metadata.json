@@ -1,0 +1,8 @@
+{
+  "name": "睡眠・体調記録アプリ v5(開発用)",
+  "description": "Androidスマホで簡単にポチポチと睡眠・就寝・起床を記録し、CSV出力できるシンプルで押しやすい睡眠記録アプリです。",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

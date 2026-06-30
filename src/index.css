@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans JP", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body {
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  overscroll-behavior-y: contain; /* Prevents pull-to-refresh pull downs on mobile */
+}
+
+/* Custom scrollbars for a clean look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 10px; /* Taller horizontal scrollbar for easier touch/grab scrolling */
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9; /* Active track visual feedback */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #94a3b8; /* Darker, higher contrast thumb to highlight grab capability */
+  border: 2px solid #f1f5f9; /* Border padding to keep thumb defined and rounded */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b; /* Intense highlight hover state */
+}
+
+/* Print styles to ignore zoom when printing/generating PDF */
+@media print {
+  #report-paper-sheet {
+    transform: scale(1) !important;
+    transform-origin: top center !important;
+  }
+}
+
