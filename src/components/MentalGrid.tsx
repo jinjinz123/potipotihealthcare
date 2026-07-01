@@ -938,7 +938,6 @@ export default function MentalGrid({
                   </label>
                   <input
                     type="text"
-                    maxLength={8}
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-black dark:text-[#e3e2e6] rounded-xl px-3 py-2 text-xs font-black focus:outline-hidden focus:border-indigo-500 transition-all placeholder:text-slate-400"
                     placeholder="焦燥感"
                     value={typedName}
@@ -952,7 +951,6 @@ export default function MentalGrid({
                   </label>
                   <input
                     type="text"
-                    maxLength={24}
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-black dark:text-[#e3e2e6] rounded-xl px-3 py-2 text-xs font-black focus:outline-hidden focus:border-indigo-500 transition-all placeholder:text-slate-400"
                     placeholder="焦りやイライラはどれくらい？"
                     value={typedDesc}
@@ -1057,7 +1055,6 @@ export default function MentalGrid({
                               </span>
                               <input
                                 type="text"
-                                maxLength={10}
                                 placeholder={`自動: ${defaultText}`}
                                 value={customLabelsState[score] || ''}
                                 onChange={(e) => {
@@ -1137,7 +1134,14 @@ export default function MentalGrid({
                       type="button"
                       onClick={() => {
                         if (!typedName.trim()) return;
-                        onUpdateRow(selectedRow.id, typedName.trim().slice(0, 8), typedDesc.trim().slice(0, 24), selectedIcon, customLabelsState, typedScaleType);
+                        const slicedLabels: { [score: number]: string } = {};
+                        Object.keys(customLabelsState).forEach(k => {
+                          const num = Number(k);
+                          if (customLabelsState[num] !== undefined) {
+                            slicedLabels[num] = customLabelsState[num].slice(0, 10);
+                          }
+                        });
+                        onUpdateRow(selectedRow.id, typedName.trim().slice(0, 8), typedDesc.trim().slice(0, 24), selectedIcon, slicedLabels, typedScaleType);
                         setSelectedRow(null);
                         setIsDeleteConfirm(false);
                       }}
@@ -1220,7 +1224,6 @@ export default function MentalGrid({
                 </label>
                 <input
                   type="text"
-                  maxLength={8}
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-black dark:text-[#e3e2e6] rounded-xl px-3 py-2 text-xs font-black focus:outline-hidden focus:border-indigo-500 transition-all placeholder:text-slate-400"
                   placeholder="例：希死念慮、焦燥感 など"
                   value={newName}
@@ -1234,7 +1237,6 @@ export default function MentalGrid({
                 </label>
                 <input
                   type="text"
-                  maxLength={24}
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-black dark:text-[#e3e2e6] rounded-xl px-3 py-2 text-xs font-black focus:outline-hidden focus:border-indigo-500 transition-all placeholder:text-slate-400"
                   placeholder="例：今日一日の焦りやイライラは？"
                   value={newDesc}
@@ -1322,7 +1324,7 @@ export default function MentalGrid({
                   disabled={!newName.trim()}
                   onClick={() => {
                     if (!newName.trim()) return;
-                    onAddRow(newName.trim(), newDesc.trim() || `${newName}の状態は？`, newIcon, newScaleType);
+                    onAddRow(newName.trim().slice(0, 8), newDesc.trim().slice(0, 24) || `${newName.trim().slice(0, 8)}の状態は？`, newIcon, newScaleType);
                     setIsAddingRow(false);
                   }}
                   className={`font-extrabold text-xs py-2 px-5 rounded-xl shadow-xs flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer ${

@@ -966,11 +966,18 @@ export default function OtherSettings({
                   : 'bg-slate-50 border-slate-250 text-blue-700 focus:bg-white focus:border-blue-500'
               }`}
             >
-              {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
-                <option key={num} value={num} className={displayMode === 'dark' ? 'bg-slate-900 text-[#e3e2e6]' : 'bg-white text-slate-800'}>
-                  {num}列を表示
-                </option>
-              ))}
+              {(() => {
+                const colOptions = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+                if (!colOptions.includes(customColCount)) {
+                  colOptions.push(customColCount);
+                  colOptions.sort((a, b) => a - b);
+                }
+                return colOptions.map((num) => (
+                  <option key={num} value={num} className={displayMode === 'dark' ? 'bg-slate-900 text-[#e3e2e6]' : 'bg-white text-slate-800'}>
+                    {num}列を表示
+                  </option>
+                ));
+              })()}
             </select>
           </div>
         </div>

@@ -1246,7 +1246,6 @@ export default function DeveloperTab({
                       </span>
                       <input
                         type="text"
-                        maxLength={3}
                         value={currentVal}
                         onChange={(e) => {
                           const val = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');

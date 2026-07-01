@@ -449,7 +449,6 @@ export default function Palette({
                 </label>
                 <input
                   type="text"
-                  maxLength={5}
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="二度寝"
@@ -465,14 +464,10 @@ export default function Palette({
                 <div className="pt-1">
                   <input
                     type="text"
-                    maxLength={1}
                     value={formSymbol}
                     placeholder="S"
                     onChange={(e) => {
-                      const val = e.target.value;
-                      if (val.length <= 1) {
-                        setFormSymbol(val);
-                      }
+                      setFormSymbol(e.target.value);
                     }}
                     className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2 text-sm font-black text-black focus:outline-hidden focus:border-blue-500 transition-all shadow-6xs placeholder:text-slate-450"
                   />

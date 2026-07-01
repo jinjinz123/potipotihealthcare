@@ -39,6 +39,10 @@ interface SleepViewerProps {
   chartScaleFactor?: number;
 }
 
+const isDefaultColName = (name: string): boolean => {
+  return /^列\d+$/.test(name.trim());
+};
+
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Droplet,
   MapPin,
@@ -515,14 +519,14 @@ export default function SleepViewer({
               // "すべて" のタグは除外
               if (cat === 'すべて') return null;
 
-              // このカテゴリに紐づいた記録項目（カスタムカラム）を抽出
+              // このカテゴリに紐づいた記録項目（カスタムカラム）を抽出、デフォルト名は除外
               const associatedCols = Array.from({ length: customColCount })
                 .map((_, cIdx) => {
                   const colName = customColNames[cIdx] || `列${cIdx + 2}`;
                   const colCat = customColCategories[cIdx] || 'その他';
                   return { cIdx, colName, colCat };
                 })
-                .filter(col => col.colCat === cat);
+                .filter(col => col.colCat === cat && !isDefaultColName(col.colName));
 
               // 紐づく項目が一つもなければ、表示しない
               if (associatedCols.length === 0) return null;

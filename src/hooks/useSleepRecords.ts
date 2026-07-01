@@ -155,6 +155,29 @@ export function useSleepRecords(showToast: (msg: string) => void) {
     showToast(`📊 活動記録列を${val}列に設定しました`);
   };
 
+  const handleAddCustomCols = (count: number) => {
+    if (count <= 0) return;
+    const nextColCount = customColCount + count;
+    setCustomColCount(nextColCount);
+    saveCustomColCount(nextColCount);
+
+    const updatedNames = [...customColNames];
+    for (let i = customColNames.length; i < nextColCount; i++) {
+      updatedNames.push(`列${i + 2}`);
+    }
+    setCustomColNames(updatedNames);
+    saveCustomColNames(updatedNames);
+
+    const updatedCategories = [...customColCategories];
+    for (let i = customColCategories.length; i < nextColCount; i++) {
+      updatedCategories.push('その他');
+    }
+    setCustomColCategories(updatedCategories);
+    saveCustomColCategories(updatedCategories);
+
+    showToast(`➕ 新しく${count}列の記録項目を追加しました`);
+  };
+
   const handleUpdateColConfig = (
     colIdx: number, 
     newName: string, 
@@ -574,6 +597,7 @@ export function useSleepRecords(showToast: (msg: string) => void) {
     handleSetInputMethod,
     handleStampsChange,
     handleSetCustomColCount,
+    handleAddCustomCols,
     handleUpdateColConfig,
     handleSwapCustomCols,
     handleDeleteCustomCol,

@@ -214,65 +214,44 @@ export default function BipolarReport({
   const motivationRow = mentalRows?.find(r => r.id === 'motivation' || r.name.includes('意欲') || r.name.includes('やる気'));
   const motivationRowId = motivationRow ? motivationRow.id : 'motivation';
 
-  // Generate dates array based on selected period
+  // Generate dates array based on selected period with fixed-days logic to prevent "no data" message
   const daysArray: { dateStr: string; displayLabel: string; rawDay: number; month: number }[] = [];
 
-  if (period === '1w') {
-    const baseDate = new Date(selectedDateStr);
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(baseDate);
-      d.setDate(baseDate.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const m = d.getMonth() + 1;
-      const dayNum = d.getDate();
-      daysArray.push({
-        dateStr,
-        displayLabel: `${m}/${dayNum}`,
-        rawDay: dayNum,
-        month: m
-      });
-    }
-  } else if (period === '1m') {
-    const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${viewYear}-${String(viewMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      daysArray.push({
-        dateStr,
-        displayLabel: String(d),
-        rawDay: d,
-        month: viewMonth
-      });
-    }
-  } else {
-    let monthsToInclude = 3;
-    if (period === '6m') monthsToInclude = 6;
-    if (period === '1y') monthsToInclude = 12;
-
-    const endYear = viewYear;
-    const endMonth = viewMonth;
+  const getBaseDate = (): Date => {
+    const parts = selectedDateStr.split('-');
+    const selYear = parseInt(parts[0], 10) || 2026;
+    const selMonth = parseInt(parts[1], 10) || 6;
+    const selDay = parseInt(parts[2], 10) || 30;
     
-    const monthsList: { year: number; month: number }[] = [];
-    for (let i = monthsToInclude - 1; i >= 0; i--) {
-      let m = endMonth - i;
-      let y = endYear;
-      while (m <= 0) {
-        m += 12;
-        y -= 1;
-      }
-      monthsList.push({ year: y, month: m });
+    if (selYear === viewYear && selMonth === viewMonth) {
+      return new Date(selYear, selMonth - 1, selDay);
+    } else {
+      return new Date(viewYear, viewMonth, 0);
     }
+  };
 
-    monthsList.forEach(({ year, month }) => {
-      const daysInM = new Date(year, month, 0).getDate();
-      for (let d = 1; d <= daysInM; d++) {
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        daysArray.push({
-          dateStr,
-          displayLabel: `${month}/${d}`,
-          rawDay: d,
-          month: month
-        });
-      }
+  const baseDate = getBaseDate();
+  let daysCountToInclude = 30;
+  if (period === '1w') daysCountToInclude = 7;
+  else if (period === '1m') daysCountToInclude = 30;
+  else if (period === '3m') daysCountToInclude = 90;
+  else if (period === '6m') daysCountToInclude = 180;
+  else if (period === '1y') daysCountToInclude = 365;
+
+  for (let i = daysCountToInclude - 1; i >= 0; i--) {
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() - i);
+    
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const dayNum = d.getDate();
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    
+    daysArray.push({
+      dateStr,
+      displayLabel: `${month}/${dayNum}`,
+      rawDay: dayNum,
+      month: month
     });
   }
 
@@ -344,6 +323,7 @@ export default function BipolarReport({
       day: dayInfo.rawDay,
       dateStr: dayInfo.dateStr,
       displayLabel: dayInfo.displayLabel,
+      month: dayInfo.month,
       value: moodVal,
       isMixed,
       mixedSeverity
@@ -415,8 +395,10 @@ export default function BipolarReport({
     });
   } else if (period === '1m') {
     currentDataWithMixed.forEach((d) => {
-      if (d.day === 1 || d.day % 5 === 0 || d.day === totalDaysCount) {
-        xTicks.push({ index: d.index, label: String(d.day), isMonthStart: d.day === 1 });
+      if (d.day === 1) {
+        xTicks.push({ index: d.index, label: `${d.month}/1`, isMonthStart: true });
+      } else if (d.day % 5 === 0) {
+        xTicks.push({ index: d.index, label: String(d.day), isMonthStart: false });
       }
     });
   } else if (period === '3m') {
@@ -487,10 +469,10 @@ export default function BipolarReport({
   // Adjust summary generation message according to period
   const getPeriodLabelJP = () => {
     if (period === '1w') return '1週間';
-    if (period === '1m') return '1か月';
-    if (period === '3m') return '3か月';
-    if (period === '6m') return '半年';
-    return '1年';
+    if (period === '1m') return '30日';
+    if (period === '3m') return '90日';
+    if (period === '6m') return '180日';
+    return '365日';
   };
 
   const stats = {
@@ -561,10 +543,10 @@ export default function BipolarReport({
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             {[
               { id: '1w', label: '1週間' },
-              { id: '1m', label: '1か月' },
-              { id: '3m', label: '3か月' },
-              { id: '6m', label: '半年' },
-              { id: '1y', label: '1年' }
+              { id: '1m', label: '30日' },
+              { id: '3m', label: '90日' },
+              { id: '6m', label: '180日' },
+              { id: '1y', label: '365日' }
             ].map((p) => {
               const isActive = period === p.id;
               return (
@@ -599,7 +581,7 @@ export default function BipolarReport({
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
             isDark ? 'bg-[#1C1B1F] text-[#FFD835]' : 'bg-slate-150 text-slate-700'
           }`}>
-            {period === '1w' ? '1週間表示' : period === '1m' ? '1か月表示' : period === '3m' ? '3か月表示' : period === '6m' ? '半年表示' : '1年表示'}
+            {period === '1w' ? '1週間表示' : period === '1m' ? '30日表示' : period === '3m' ? '90日表示' : period === '6m' ? '180日表示' : '365日表示'}
           </span>
         </div>
 
@@ -775,7 +757,7 @@ export default function BipolarReport({
                     fontWeight="900"
                     fill={isDark ? '#CAC4D0' : '#475569'}
                   >
-                    {period === '1m' ? '(日)' : ''}
+                    {period === '1m' ? '(30日分)' : ''}
                   </text>
 
                   {/* 4. Smooth Spline Path Line */}
@@ -1165,12 +1147,12 @@ export default function BipolarReport({
             📅 表示期間切替
           </span>
           <div className="flex items-center gap-1.5 mt-0.5">
-            {['1週間', '1か月', '3か月', '1年'].map((period, i) => (
+            {['1週間', '30日', '90日', '365日'].map((period, i) => (
               <span 
                 key={i} 
                 className={`text-[10.5px] font-black px-2.5 py-1 rounded border opacity-50 ${
                   isDark ? 'bg-[#1C1B1F] border-[#49454F] text-[#CAC4D0]' : 'bg-white border-slate-200 text-slate-500'
-                } ${period === '1か月' ? 'opacity-100 font-bold border-[#FFD835]' : ''}`}
+                } ${period === '30日' ? 'opacity-100 font-bold border-[#FFD835]' : ''}`}
               >
                 {period}
               </span>

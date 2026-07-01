@@ -14,7 +14,8 @@ import {
   X,
   Plus,
   Printer,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Eraser
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { jsPDF } from 'jspdf';
@@ -105,6 +106,7 @@ export default function App() {
     customColNames,
     handleStampsChange,
     handleSetCustomColCount,
+    handleAddCustomCols,
     handleUpdateColConfig,
     handleSwapCustomCols,
     handleDeleteCustomCol,
@@ -142,6 +144,7 @@ export default function App() {
     setCustomColNames: setCustomActualSleepColNames,
     handleStampsChange: handleActualSleepStampsChange,
     handleSetCustomColCount: handleSetActualSleepCustomColCount,
+    handleAddCustomCols: handleAddActualSleepCustomCols,
     handleUpdateColConfig: handleUpdateActualSleepColConfig,
     handleSwapCustomCols: handleSwapActualSleepCustomCols,
     handleDeleteCustomCol: handleDeleteActualSleepCustomCol,
@@ -329,7 +332,7 @@ export default function App() {
     handleCopyMentalPreviousDay();
   };
 
-  const wrappedHandleToggleMentalScore = (rowId: string, score: number) => {
+  const wrappedHandleToggleMentalScore = (rowId: string, score: number | null) => {
     saveSnapshotBeforeAction();
     handleToggleMentalScore(rowId, score);
   };
@@ -1060,15 +1063,15 @@ export default function App() {
       >
         
         {/* TOP BAR / APP TITLE WITH INTEGRATED DATE NAVIGATOR & TABS */}
-        {(gridMode !== 'viewer' || viewerSubScreen === 'menu' || viewerSubScreen === 'viewer' || viewerSubScreen === 'report' || viewerSubScreen === 'report_preview') && (
-          <header className={`flex min-h-[4rem] h-auto py-2 flex-wrap items-center justify-between gap-y-2 gap-x-4 px-4 border-b shrink-0 select-none md:rounded-t-[36px] transition-colors duration-300 ${
+        {(gridMode !== 'viewer' || viewerSubScreen === 'menu' || viewerSubScreen === 'report' || viewerSubScreen === 'report_preview') && (
+          <header className={`flex h-12 sm:h-14 items-center justify-between gap-x-2 px-3 border-b shrink-0 select-none md:rounded-t-[36px] transition-colors duration-300 ${
             displayMode === 'dark' 
               ? 'bg-[#1c1b1f] border-[#2d2c30] text-[#e6e1e5]' 
               : 'bg-white border-gray-250 text-slate-800'
           }`}>
             {/* Left Side: Small App Title & Back buttons */}
-            <div className="items-center gap-2 shrink-0 flex">
-              {((gridMode === 'settings' || gridMode === 'developer' || gridMode === 'settings_menu' || gridMode === 'viewer') || activeTab === 'developer') && (
+            {((gridMode === 'settings' || gridMode === 'developer' || gridMode === 'settings_menu' || gridMode === 'viewer') || activeTab === 'developer') ? (
+              <div className="items-center gap-1.5 shrink-0 flex" id="header-left-section">
                 <button 
                   onClick={() => {
                     if (gridMode === 'settings' || gridMode === 'developer') {
@@ -1092,60 +1095,61 @@ export default function App() {
                       showToast('🕒 記録画面に戻りました');
                     }
                   }}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl border active:scale-90 transition-all cursor-pointer bg-slate-850 border-slate-700 hover:bg-slate-750 text-[#e3e2e6]`}
+                  className={`flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl border active:scale-90 transition-all cursor-pointer bg-slate-850 border-slate-700 hover:bg-slate-750 text-[#e3e2e6]`}
                   title="戻る"
                   aria-label="戻る"
                   id="close-viewer-btn"
                 >
-                  <ArrowLeft className="h-5.5 w-5.5 stroke-[2.5]" />
+                  <ArrowLeft className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5 stroke-[2.5]" />
                 </button>
-              )}
-              <h1 className={`text-sm sm:text-base font-black font-sans tracking-tight ${
-                gridMode === 'viewer' && viewerSubScreen === 'report' ? 'block' : 'hidden xs:block'
-              } ${
-                displayMode === 'dark' ? 'text-slate-100' : 'text-slate-800'
-              }`}>
-                {gridMode === 'standard' && '活動記録'}
-                {gridMode === 'actual_sleep' && '睡眠記録'}
-                {gridMode === 'mental' && '体調記録'}
-                {gridMode === 'viewer' && (
-                  viewerSubScreen === 'menu' ? '選択メニュー' :
-                  viewerSubScreen === 'viewer' ? '履歴ビュアー' : 'レポート'
-                )}
-                {gridMode === 'settings' && '環境設定'}
-                {gridMode === 'developer' && '開発ツール'}
-                {gridMode === 'settings_menu' && 'その他設定'}
-              </h1>
-            </div>
+                <h1 className={`text-xs sm:text-base font-black font-sans tracking-tight ${
+                  gridMode === 'viewer' && viewerSubScreen === 'report' ? 'block' : 'hidden xs:block'
+                } ${
+                  gridMode === 'mental' || gridMode === 'standard' || gridMode === 'actual_sleep' ? 'hidden' : ''
+                } ${
+                  displayMode === 'dark' ? 'text-slate-100' : 'text-slate-800'
+                }`}>
+                  {gridMode === 'standard' && '活動記録'}
+                  {gridMode === 'actual_sleep' && '睡眠記録'}
+                  {gridMode === 'viewer' && (
+                    viewerSubScreen === 'menu' ? '選択メニュー' :
+                    viewerSubScreen === 'viewer' ? '履歴ビュアー' : 'レポート'
+                  )}
+                  {gridMode === 'settings' && '環境設定'}
+                  {gridMode === 'developer' && '開発ツール'}
+                  {gridMode === 'settings_menu' && 'その他設定'}
+                </h1>
+              </div>
+            ) : null}
             
             {/* Center Side: Date Navigation or Viewer Title */}
             {activeTab === 'record' ? (
               gridMode === 'viewer' ? (
                 viewerSubScreen === 'report' ? null : (
-                  <div className="text-center shrink-0 font-extrabold text-sm sm:text-base text-blue-500 tracking-tight" id="header-viewer-title">
+                  <div className="text-center flex-1 shrink-0 font-extrabold text-sm sm:text-base text-blue-500 tracking-tight" id="header-viewer-title">
                     {viewerSubScreen === 'menu' && '履歴・レポート選択'}
                     {viewerSubScreen === 'viewer' && '全履歴ビュアー'}
                     {viewerSubScreen === 'report_preview' && 'レポートプレビュー'}
                   </div>
                 )
               ) : gridMode === 'settings' ? (
-                <div className="text-center shrink-0 font-extrabold text-sm sm:text-base text-sky-500 tracking-tight" id="header-settings-title">
+                <div className="text-center flex-1 shrink-0 font-extrabold text-sm sm:text-base text-sky-500 tracking-tight" id="header-settings-title">
                   設定とお手入れ
                 </div>
               ) : gridMode === 'settings_menu' ? (
-                <div className="text-center shrink-0 font-extrabold text-sm sm:text-base text-slate-350 tracking-tight" id="header-other-title">
+                <div className="text-center flex-1 shrink-0 font-extrabold text-sm sm:text-base text-slate-350 tracking-tight" id="header-other-title">
                   その他メニュー
                 </div>
               ) : gridMode === 'developer' ? (
-                <div className="text-center shrink-0 font-extrabold text-sm sm:text-base text-purple-400 tracking-tight" id="header-dev-title">
+                <div className="text-center flex-1 shrink-0 font-extrabold text-sm sm:text-base text-purple-400 tracking-tight" id="header-dev-title">
                   開発者メニュー
                 </div>
               ) : gridMode === 'mental' ? (
-                <div className="flex items-center justify-center gap-0.5 sm:gap-1 shrink-0 px-1 select-none" id="header-mental-title-container">
-                  <div className="flex items-center justify-center gap-0.5 sm:gap-1 shrink-0" id="header-mental-date-navigator">
+                <div className="flex-1 flex items-center justify-center gap-0.5 sm:gap-1 select-none" id="header-mental-title-container">
+                  <div className="flex items-center justify-center gap-0.5 sm:gap-1" id="header-mental-date-navigator">
                     <button
                       onClick={() => setSelectedDate(shiftDateString(selectedDate, -1))}
-                      className={`text-base sm:text-lg font-black px-2 py-1.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
+                      className={`text-xl xs:text-2xl sm:text-3xl font-black px-1.5 xs:px-2 py-0.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
                         displayMode === 'dark' ? 'text-indigo-400 hover:text-indigo-305' : 'text-indigo-600 hover:text-indigo-800'
                       }`}
                       aria-label="前日の記録へ"
@@ -1156,7 +1160,7 @@ export default function App() {
 
                     <div 
                       onClick={handleJumpToToday}
-                      className={`text-center px-2 py-1 mx-1 shrink-0 cursor-pointer rounded-lg active:scale-95 transition-all select-none ${
+                      className={`text-center px-1.5 py-0.5 mx-0.5 shrink-0 cursor-pointer rounded-lg active:scale-95 transition-all select-none ${
                         displayMode === 'dark' 
                           ? 'hover:bg-slate-800 text-slate-200 hover:text-[#e3e2e6]' 
                           : 'hover:bg-gray-100 text-slate-900'
@@ -1164,14 +1168,14 @@ export default function App() {
                       title="今日の日付へ移動"
                       id="header-mental-date-display-wrapper"
                     >
-                      <div className="flex flex-row items-center justify-center gap-1.5 leading-none">
-                        <span className={`text-xs sm:text-sm md:text-base font-extrabold tracking-tight font-mono ${
+                      <div className="flex flex-row items-baseline justify-start gap-1 leading-none">
+                        <span className={`text-base xs:text-lg sm:text-xl md:text-2xl font-extrabold tracking-tight font-mono ${
                           displayMode === 'dark' ? 'text-slate-200' : 'text-slate-900'
                         }`}>
                           {formatDateLabel(selectedDate).split(' ')[0]}
                         </span>
                         <span className={`text-xs sm:text-sm font-extrabold tracking-wide ${
-                          displayMode === 'dark' ? 'text-slate-455' : 'text-gray-500'
+                          displayMode === 'dark' ? 'text-slate-400' : 'text-gray-500'
                         }`}>
                           {formatDateLabel(selectedDate).split(' ')[1] || ''}
                         </span>
@@ -1180,7 +1184,7 @@ export default function App() {
 
                     <button
                       onClick={() => setSelectedDate(shiftDateString(selectedDate, 1))}
-                      className={`text-base sm:text-lg font-black px-2 py-1.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
+                      className={`text-xl xs:text-2xl sm:text-3xl font-black px-1.5 xs:px-2 py-0.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
                         displayMode === 'dark' ? 'text-indigo-400 hover:text-indigo-305' : 'text-indigo-600 hover:text-indigo-800'
                       }`}
                       aria-label="翌日の記録へ"
@@ -1192,7 +1196,7 @@ export default function App() {
                     {undoStack.length > 0 && (
                       <button
                         onClick={handleUndo}
-                        className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg active:scale-90 transition-all cursor-pointer mx-0.5 sm:mx-1 shrink-0 ${
+                        className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg active:scale-90 transition-all cursor-pointer ml-1.5 sm:ml-2.5 shrink-0 ${
                           displayMode === 'dark'
                             ? 'bg-emerald-950/40 border border-emerald-800/80 hover:bg-emerald-900/60 text-emerald-400'
                             : 'bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 shadow-3xs'
@@ -1203,74 +1207,118 @@ export default function App() {
                         <Undo2 className="h-4 w-4 sm:h-4.5 sm:w-4.5 stroke-[2.5]" />
                       </button>
                     )}
+
+                    {/* 操作盤を隠す/表示する */}
+                    <button
+                      onClick={() => {
+                        setShowControls(prev => !prev);
+                        showToast(showControls ? '🧽 操作盤を非表示にしました（広々使えます）' : '🎨 操作盤を表示しました');
+                      }}
+                      className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg active:scale-90 transition-all cursor-pointer ml-1.5 sm:ml-2 shrink-0 ${
+                        showControls
+                          ? (displayMode === 'dark'
+                              ? 'bg-slate-850 border border-slate-700 text-slate-200 hover:bg-slate-750'
+                              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 shadow-3xs')
+                          : (displayMode === 'dark'
+                              ? 'bg-indigo-95 border border-indigo-800 text-indigo-450 hover:bg-indigo-900'
+                              : 'bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 shadow-3xs')
+                      }`}
+                      title={showControls ? "操作盤を非表示にして、記録エリアを広げます" : "操作盤を表示します"}
+                      id="header-mental-toggle-btn"
+                    >
+                      {showControls ? <EyeOff className="h-4 w-4 stroke-[2.5]" /> : <Eye className="h-4 w-4 stroke-[2.5]" />}
+                    </button>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center gap-0.5 sm:gap-1 shrink-0 px-1" id="header-date-navigator">
-                  <button
-                    onClick={() => setSelectedDate(shiftDateString(selectedDate, -1))}
-                    className={`text-base sm:text-lg font-black px-2 py-1.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
-                      displayMode === 'dark' ? 'text-sky-400 hover:text-sky-305' : 'text-blue-600 hover:text-blue-800'
-                    }`}
-                    aria-label="前日の記録へ"
-                    id="header-prev-btn"
-                  >
-                    ◀
-                  </button>
-
-                  <div 
-                    onClick={handleJumpToToday}
-                    className={`text-center px-2 py-1 mx-1 shrink-0 cursor-pointer rounded-lg active:scale-95 transition-all select-none ${
-                      displayMode === 'dark' 
-                        ? 'hover:bg-slate-800 text-slate-200 hover:text-[#e3e2e6]' 
-                        : 'hover:bg-gray-100 text-slate-900'
-                    }`}
-                    title="今日の日付へ移動"
-                    id="header-date-display-wrapper"
-                  >
-                    <div className="flex flex-row items-center justify-center gap-1.5 leading-none">
-                      <span className={`text-xs sm:text-sm md:text-base font-extrabold tracking-tight font-mono ${
-                        displayMode === 'dark' ? 'text-slate-200' : 'text-slate-900'
-                      }`}>
-                        {formatDateLabel(selectedDate).split(' ')[0]}
-                      </span>
-                      <span className={`text-xs sm:text-sm font-extrabold tracking-wide ${
-                        displayMode === 'dark' ? 'text-slate-455' : 'text-gray-500'
-                      }`}>
-                        {formatDateLabel(selectedDate).split(' ')[1] || ''}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedDate(shiftDateString(selectedDate, 1))}
-                    className={`text-base sm:text-lg font-black px-2 py-1.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
-                      displayMode === 'dark' ? 'text-sky-400 hover:text-sky-305' : 'text-blue-600 hover:text-blue-800'
-                    }`}
-                    aria-label="翌日の記録へ"
-                    id="header-next-btn"
-                  >
-                    ▶
-                  </button>
-
-                  {undoStack.length > 0 && (
+                <div className="flex-1 flex items-center justify-center gap-0.5 sm:gap-1 select-none" id="header-date-navigator">
+                  <div className="flex items-center justify-center gap-0.5 sm:gap-1" id="header-date-navigator-container">
                     <button
-                      onClick={handleUndo}
-                      className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg active:scale-90 transition-all cursor-pointer mx-0.5 sm:mx-1 shrink-0 ${
-                        displayMode === 'dark'
-                          ? 'bg-emerald-950/40 border border-emerald-800/80 hover:bg-emerald-900/60 text-emerald-400'
-                          : 'bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 shadow-3xs'
+                      onClick={() => setSelectedDate(shiftDateString(selectedDate, -1))}
+                      className={`text-xl xs:text-2xl sm:text-3xl font-black px-1.5 xs:px-2 py-0.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
+                        displayMode === 'dark' ? 'text-sky-400 hover:text-sky-305' : 'text-blue-600 hover:text-blue-800'
                       }`}
-                      title="直前の操作を取り消す (元に戻す)"
-                      id="header-undo-btn"
+                      aria-label="前日の記録へ"
+                      id="header-prev-btn"
                     >
-                      <Undo2 className="h-4 w-4 sm:h-4.5 sm:w-4.5 stroke-[2.5]" />
+                      ◀
                     </button>
-                  )}
+
+                    <div 
+                      onClick={handleJumpToToday}
+                      className={`text-center px-1.5 py-0.5 mx-0.5 shrink-0 cursor-pointer rounded-lg active:scale-95 transition-all select-none ${
+                        displayMode === 'dark' 
+                          ? 'hover:bg-slate-800 text-slate-200 hover:text-[#e3e2e6]' 
+                          : 'hover:bg-gray-100 text-slate-900'
+                      }`}
+                      title="今日の日付へ移動"
+                      id="header-date-display-wrapper"
+                    >
+                      <div className="flex flex-row items-baseline justify-start gap-1 leading-none">
+                        <span className={`text-base xs:text-lg sm:text-xl md:text-2xl font-extrabold tracking-tight font-mono ${
+                          displayMode === 'dark' ? 'text-slate-200' : 'text-slate-900'
+                        }`}>
+                          {formatDateLabel(selectedDate).split(' ')[0]}
+                        </span>
+                        <span className={`text-xs sm:text-sm font-extrabold tracking-wide ${
+                          displayMode === 'dark' ? 'text-slate-400' : 'text-gray-500'
+                        }`}>
+                          {formatDateLabel(selectedDate).split(' ')[1] || ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedDate(shiftDateString(selectedDate, 1))}
+                      className={`text-xl xs:text-2xl sm:text-3xl font-black px-1.5 xs:px-2 py-0.5 hover:scale-120 active:scale-90 transition-all select-none cursor-pointer font-sans ${
+                        displayMode === 'dark' ? 'text-sky-400 hover:text-sky-305' : 'text-blue-600 hover:text-blue-800'
+                      }`}
+                      aria-label="翌日の記録へ"
+                      id="header-next-btn"
+                    >
+                      ▶
+                    </button>
+
+                    {undoStack.length > 0 && (
+                      <button
+                        onClick={handleUndo}
+                        className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg active:scale-90 transition-all cursor-pointer ml-1.5 sm:ml-2.5 shrink-0 ${
+                          displayMode === 'dark'
+                            ? 'bg-emerald-950/40 border border-emerald-800/80 hover:bg-emerald-900/60 text-emerald-400'
+                            : 'bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 shadow-3xs'
+                        }`}
+                        title="直前の操作を取り消す (元に戻す)"
+                        id="header-undo-btn"
+                      >
+                        <Undo2 className="h-4 w-4 sm:h-4.5 sm:w-4.5 stroke-[2.5]" />
+                      </button>
+                    )}
+
+                    {/* 操作盤を隠す/表示する */}
+                    <button
+                      onClick={() => {
+                        setShowControls(prev => !prev);
+                        showToast(showControls ? '🧽 操作盤を非表示にしました（広々使えます）' : '🎨 操作盤を表示しました');
+                      }}
+                      className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg active:scale-90 transition-all cursor-pointer ml-1.5 sm:ml-2 shrink-0 ${
+                        showControls
+                          ? (displayMode === 'dark'
+                              ? 'bg-slate-850 border border-slate-700 text-slate-200 hover:bg-slate-750'
+                              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 shadow-3xs')
+                          : (displayMode === 'dark'
+                              ? 'bg-indigo-95 border border-indigo-800 text-indigo-450 hover:bg-indigo-900'
+                              : 'bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 shadow-3xs')
+                      }`}
+                      title={showControls ? "操作盤を非表示にして、記録エリアを広げます" : "操作盤を表示します"}
+                      id="header-toggle-btn"
+                    >
+                      {showControls ? <EyeOff className="h-4 w-4 stroke-[2.5]" /> : <Eye className="h-4 w-4 stroke-[2.5]" />}
+                    </button>
+                  </div>
                 </div>
               )
             ) : (
-              <div className={`text-center shrink-0 font-bold text-sm ${
+              <div className={`text-center flex-1 shrink-0 font-bold text-sm ${
                 displayMode === 'dark' ? 'text-slate-200' : 'text-slate-800'
               }`}>
                 活動履歴
@@ -1278,12 +1326,8 @@ export default function App() {
             )}
             
             {/* Right Side: Back to record or Today Calendar shortcut */}
-            <div className={`flex items-center select-none ${
-              gridMode === 'viewer' && viewerSubScreen === 'report' 
-                ? 'flex-1 justify-center sm:justify-end min-w-0 w-full sm:w-auto pl-1 sm:pl-1.5' 
-                : 'shrink-0 pl-1.5'
-            }`}>
-              {activeTab === 'graph' ? (
+            {activeTab === 'graph' ? (
+              <div className="flex items-center select-none shrink-0 pl-1.5">
                 <button 
                   onClick={() => {
                     setActiveTab('record');
@@ -1297,8 +1341,14 @@ export default function App() {
                   <ListTodo className="h-4 w-4 stroke-[2.5]" />
                   <span>戻る</span>
                 </button>
-              ) : (gridMode === 'viewer') ? (
-                viewerSubScreen === 'report' ? (
+              </div>
+            ) : gridMode === 'viewer' ? (
+              <div className={`flex items-center select-none ${
+                viewerSubScreen === 'report' 
+                  ? 'flex-1 justify-center sm:justify-end min-w-0 w-full sm:w-auto pl-1 sm:pl-1.5' 
+                  : 'shrink-0 pl-1.5'
+              }`}>
+                {viewerSubScreen === 'report' ? (
                   <div className="flex items-center gap-1.5 justify-end w-full max-w-full">
                     
                     {/* STANDARD TOOLBAR CONTROLS */}
@@ -1439,33 +1489,9 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="w-9 h-9" />
-                )
-              ) : (gridMode === 'settings') ? (
-                <div className="w-9 h-9" />
-              ) : (
-                <button 
-                  onClick={() => {
-                    setShowControls(prev => !prev);
-                    showToast(showControls ? '🧽 操作盤を非表示にしました（広々使えます）' : '🎨 操作盤を表示しました');
-                  }}
-                  className={`flex h-9 px-2.5 sm:px-3.5 items-center justify-center gap-1.5 rounded-xl border font-black text-[11px] sm:text-xs transition-all cursor-pointer ${
-                    showControls 
-                      ? (displayMode === 'dark' 
-                          ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750 hover:text-[#e3e2e6]' 
-                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900')
-                      : (displayMode === 'dark' 
-                          ? 'bg-indigo-600 border-indigo-600 text-[#e3e2e6] hover:bg-indigo-700' 
-                          : 'bg-blue-600 border-blue-600 text-[#e3e2e6] hover:bg-blue-700 shadow-sm')
-                  }`}
-                  title={showControls ? "操作盤を非表示にする" : "操作盤を表示する"}
-                  id="toggle-controls-btn"
-                >
-                  {showControls ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  <span className="hidden xs:inline">{showControls ? '操作盤を隠す' : '操作盤を表示'}</span>
-                  <span className="xs:hidden">{showControls ? '隠す' : '表示'}</span>
-                </button>
-              )}
-            </div>
+                )}
+              </div>
+            ) : null}
           </header>
         )}
 
@@ -1916,7 +1942,7 @@ export default function App() {
                 {/* Right Column: Face Buttons, Memo & Actions Sidebar */}
                 {showControls && (
                   <div 
-                    className={`flex-1 min-w-[140px] flex flex-col shrink-0 p-2 select-none overflow-y-auto justify-between border-l transition-colors duration-300 ${
+                    className={`flex-1 min-w-[140px] flex flex-col shrink-0 p-2 select-none overflow-y-auto border-l transition-colors duration-300 ${
                       displayMode === 'dark' 
                         ? 'bg-[#1C1B1F] text-[#E6E1E5] border-[#49454F]' 
                         : 'bg-white border-slate-150 text-slate-800'
@@ -1941,16 +1967,6 @@ export default function App() {
                         </button>
                       </div>
                       
-                      {/* Sub-explanation text showing what we are rating right now */}
-                      <div className={`px-2 py-1.5 rounded-xl border text-[11px] font-black mb-3 select-none flex items-center justify-between ${
-                        displayMode === 'dark' ? 'bg-slate-900/60 border-slate-800 text-slate-350' : 'bg-slate-50 border-slate-200/85 text-slate-700'
-                      }`}>
-                        <span className="opacity-80">指標:</span>
-                        <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-550 underline-offset-2 font-black leading-none max-w-[100px] truncate">
-                          {mentalRows.find(r => r.id === activeMentalRowId)?.name || '未選択'}
-                        </span>
-                      </div>
-
                       {/* Grid of Face Buttons in 2 columns */}
                       <div className="grid grid-cols-2 gap-1.5 font-sans">
                         {(() => {
@@ -2019,12 +2035,36 @@ export default function App() {
                           });
                         })()}
                       </div>
+
+                      {/* 消しゴム (クリア) ボタン */}
+                      {activeMentalRowId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const activeRow = mentalRows.find(r => r.id === activeMentalRowId);
+                            if (activeRow) {
+                              wrappedHandleToggleMentalScore(activeMentalRowId, null);
+                              showToast(`🗑️ 「${activeRow.name}」の評価をクリアしました`);
+                            }
+                          }}
+                          className={`w-full h-11 rounded-xl border-2 flex items-center justify-center gap-2 mt-2 cursor-pointer active:scale-95 transition-all duration-100 ${
+                            displayMode === 'dark'
+                              ? 'bg-rose-955/10 border-rose-800/80 text-rose-300 hover:bg-rose-950/30 shadow-[2px_2px_0px_0px_rgba(255,255,255,0.1)]'
+                              : 'bg-rose-50 border-rose-600 text-rose-700 hover:bg-rose-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                          }`}
+                        >
+                          <Eraser className="h-4 w-4 shrink-0" />
+                          <span className="text-[11.5px] font-black tracking-wide">
+                            消しゴム (現在の項目をクリア)
+                          </span>
+                        </button>
+                      )}
                     </div>
 
                     <div className={`h-px my-1 shrink-0 ${displayMode === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`} />
 
                     {/* Mental Memo Column */}
-                    <div className="flex-1 flex flex-col min-h-0 mb-3 select-none font-sans">
+                    <div className="shrink-0 flex flex-col mb-3 select-none font-sans">
                       <div className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider mb-1.5 ml-0.5 select-none text-center sm:text-left font-sans ${
                         displayMode === 'dark' ? 'text-indigo-400' : 'text-indigo-650'
                       }`}>
@@ -2034,7 +2074,7 @@ export default function App() {
                         value={(mentalRecords[selectedDate] || {}).memo || ''}
                         onChange={(e) => handleUpdateMentalMemo(e.target.value)}
                         placeholder="今日一日の気分、モヤモヤしたこと、嬉しかったことなどの詳細を記入できます..."
-                        className={`w-full flex-1 min-h-[60px] p-2 text-xs transition-all placeholder:text-slate-500 resize-none outline-none font-sans rounded-xl ${
+                        className={`w-full h-24 p-2 text-xs transition-all placeholder:text-slate-500 resize-none outline-none font-sans rounded-xl ${
                           displayMode === 'dark' 
                             ? 'bg-slate-950 border border-slate-800 text-[#e3e2e6] focus:border-indigo-550 focus:ring-1 focus:ring-indigo-550' 
                             : 'bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600'
@@ -2049,6 +2089,8 @@ export default function App() {
                     <div className="shrink-0 pb-1 mt-1">
                       <ActionControls 
                         onClearToday={wrappedHandleClearMentalToday}
+                        onCopyPreviousDay={wrappedHandleCopyMentalPreviousDay}
+                        displayMode={displayMode}
                       />
                     </div>
                   </div>
@@ -2102,7 +2144,7 @@ export default function App() {
                   <div 
                     className={`flex-1 ${
                       isSlimForLayout ? 'min-w-[75px] xs:min-w-[85px]' : 'min-w-[140px]'
-                    } flex flex-col shrink-0 p-2 select-none overflow-y-auto justify-between border-l transition-all duration-300 ${
+                    } flex flex-col shrink-0 p-2 select-none overflow-y-auto border-l transition-all duration-300 ${
                       displayMode === 'dark' 
                         ? 'bg-[#1C1B1F] text-[#E6E1E5] border-[#49454F]' 
                         : 'bg-white border-slate-150 text-slate-800'
@@ -2246,32 +2288,45 @@ export default function App() {
                     )}
                     {isSleepTabActive && <div className={`h-px my-1 shrink-0 ${displayMode === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`} />}
 
-                    {/* Activities columns count drop-down setting */}
-                    {!isSleepTabActive && (
-                      <>
-                        <div className="shrink-0 flex flex-col min-h-0 mb-3 font-sans" id="sidebar-custom-col-count-container">
-                          <div className="flex items-center justify-between mb-1 ml-0.5 select-none font-sans">
-                            <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${
-                              displayMode === 'dark' ? 'text-sky-300' : 'text-slate-500'
-                            }`}>{isSlimForLayout ? '列' : '列数'}:</span>
-                            <select
-                              value={customColCount}
-                              onChange={(e) => handleSetCustomColCount(Number(e.target.value))}
-                              className={`text-xs font-black px-2 py-1 rounded-lg focus:outline-hidden cursor-pointer ${isSlimForLayout ? 'w-full text-center text-[10px]' : ''} ${
-                                displayMode === 'dark' 
-                                  ? 'bg-slate-900 border border-slate-700 text-sky-400' 
-                                  : 'bg-white border border-slate-250 text-blue-700'
-                              }`}
-                            >
-                              {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
-                                <option key={num} value={num} className={displayMode === 'dark' ? 'bg-slate-900 text-[#e3e2e6]' : 'bg-white text-slate-800'}>
-                                  {num}列
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        <div className={`h-px my-1 shrink-0 ${displayMode === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`} />
+                     {/* Activities columns count drop-down setting */}
+                     {!isSleepTabActive && (
+                       <>
+                         <div 
+                           className="shrink-0 flex flex-col min-h-0 mb-3 font-sans" 
+                           id="sidebar-custom-col-count-container"
+                           title="指定の列数を新規に追加します"
+                         >
+                           <div className="flex items-center justify-between mb-1 ml-0.5 select-none font-sans">
+                             <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${
+                               displayMode === 'dark' ? 'text-sky-300' : 'text-slate-500'
+                             }`}>{isSlimForLayout ? '追加' : '列追加'}:</span>
+                             <select
+                               value=""
+                               onChange={(e) => {
+                                 const num = Number(e.target.value);
+                                 if (num > 0) {
+                                   handleAddCustomCols(num);
+                                 }
+                               }}
+                               title="指定の列数を新規に追加します"
+                               className={`text-xs font-black px-2 py-1 rounded-lg focus:outline-hidden cursor-pointer ${isSlimForLayout ? 'w-full text-center text-[10px]' : ''} ${
+                                 displayMode === 'dark' 
+                                   ? 'bg-slate-900 border border-slate-700 text-sky-400' 
+                                   : 'bg-white border border-slate-250 text-blue-700'
+                               }`}
+                             >
+                               <option value="" disabled className={displayMode === 'dark' ? 'bg-slate-900 text-slate-450' : 'bg-white text-slate-400'}>
+                                 {isSlimForLayout ? '選択' : '列数を選択...'}
+                               </option>
+                               {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
+                                 <option key={num} value={num} className={displayMode === 'dark' ? 'bg-slate-900 text-[#e3e2e6]' : 'bg-white text-slate-800'}>
+                                   {num}列
+                                 </option>
+                               ))}
+                             </select>
+                           </div>
+                         </div>
+                         <div className={`h-px my-1 shrink-0 ${displayMode === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`} />
 
                         {/* Activities columns width drop-down setting */}
                         <div className="shrink-0 flex flex-col min-h-0 mb-3 font-sans" id="sidebar-custom-col-width-container">
@@ -2379,7 +2434,7 @@ export default function App() {
                     )}
 
                     {/* Group 2: Memo/Details input area with dynamic metrics */}
-                    <div className="flex-1 flex flex-col min-h-[120px] my-2 font-sans">
+                    <div className="shrink-0 flex flex-col my-2 font-sans">
                       <div className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider mb-1.5 ml-0.5 select-none flex items-center justify-between ${
                         displayMode === 'dark' ? 'text-sky-400' : 'text-slate-400'
                       }`}>
@@ -2398,7 +2453,7 @@ export default function App() {
                         value={(isSleepTabActive ? (actualSleepRecords[selectedDate] || createBlankRecord()) : currentRecord).memo || ''}
                         onChange={(e) => isSleepTabActive ? handleUpdateActualSleepMemo(e.target.value) : handleUpdateMemo(e.target.value)}
                         placeholder={isSlimForLayout ? "メモを入力..." : "今日の睡眠メモや、体調などの詳細を記入できます..."}
-                        className={`w-full flex-1 ${isSlimForLayout ? 'min-h-[40px] p-1.5 text-[10px]' : 'min-h-[60px] p-2 text-xs'} transition-all placeholder:text-slate-500 resize-none outline-none font-sans rounded-xl ${
+                        className={`w-full ${isSlimForLayout ? 'h-14 p-1.5 text-[10px]' : 'h-24 p-2 text-xs'} transition-all placeholder:text-slate-500 resize-none outline-none font-sans rounded-xl ${
                           displayMode === 'dark' 
                             ? 'bg-slate-950 border border-slate-800 text-[#e3e2e6] focus:border-sky-500 focus:ring-1 focus:ring-sky-500 placeholder:text-slate-600' 
                             : 'bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
@@ -2413,6 +2468,8 @@ export default function App() {
                     <div className="shrink-0 pb-1 mt-1">
                       <ActionControls 
                         onClearToday={isSleepTabActive ? wrappedHandleClearActualSleepToday : wrappedHandleClearToday}
+                        onCopyPreviousDay={isSleepTabActive ? wrappedHandleCopyActualSleepPreviousDay : wrappedHandleCopyPreviousDay}
+                        displayMode={displayMode}
                       />
                     </div>
 
@@ -2755,7 +2812,6 @@ export default function App() {
                     key={categoryModalTab}
                     type="text"
                     id="new-category-name-input"
-                    maxLength={10}
                     placeholder="例：サプリ、散歩 など"
                     className="flex-1 bg-[#1C1B1F] border border-[#49454F] text-[#e3e2e6] rounded-xl px-3 py-2 text-xs font-black focus:outline-hidden focus:border-indigo-500 transition-all placeholder:text-slate-500 bg-transparent"
                     onKeyDown={(e) => {
@@ -2868,7 +2924,6 @@ export default function App() {
                 </label>
                 <input
                   type="text"
-                  maxLength={10}
                   value={newCategoryValue}
                   onChange={(e) => setNewCategoryValue(e.target.value)}
                   placeholder="例：サプリ、散歩 など"
@@ -3332,7 +3387,6 @@ function CategoryListItem({ categoryName, onRename, onDelete, onMoveUp, onMoveDo
         <div className="flex-1 flex gap-1.5 items-center">
           <input
             type="text"
-            maxLength={10}
             value={editedName}
             onChange={(e) => setEditedName(e.target.value)}
             className="flex-1 bg-slate-950 border border-slate-800 text-[#e3e2e6] rounded-lg px-2 py-1 text-xs font-bold focus:outline-hidden focus:border-indigo-500 transition-all"

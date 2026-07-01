@@ -30,6 +30,11 @@ interface SleepGridProps {
   activityColFontWeight?: string;
 }
 
+
+const isDefaultColName = (name: string): boolean => {
+  return /^列\d+$/.test(name.trim());
+};
+
 export default function SleepGrid({
   record,
   onCellTap,
@@ -177,9 +182,15 @@ export default function SleepGrid({
   // Touch tracking refs for scroll safety in stamp (tap) input mode
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const isTouchCancelled = useRef<boolean>(false);
+  const isPinchingRef = useRef<boolean>(false);
 
   // Scroll safety touch handlers for stamp mode
   const handleCellTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length > 1) {
+      isTouchCancelled.current = true;
+      isPinchingRef.current = true;
+      return;
+    }
     const touch = e.touches[0];
     touchStartPos.current = { x: touch.clientX, y: touch.clientY };
     isTouchCancelled.current = false;
@@ -187,6 +198,11 @@ export default function SleepGrid({
   };
 
   const handleCellTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length > 1) {
+      isTouchCancelled.current = true;
+      isPinchingRef.current = true;
+      return;
+    }
     if (!touchStartPos.current) return;
     const touch = e.touches[0];
     const dx = Math.abs(touch.clientX - touchStartPos.current.x);
@@ -198,7 +214,14 @@ export default function SleepGrid({
   };
 
   const handleCellTouchEnd = (e: React.TouchEvent, slotIdx: number, colIdx?: number) => {
+    if (e.touches.length > 1 || e.targetTouches.length > 1) {
+      isPinchingRef.current = true;
+      isTouchCancelled.current = true;
+    }
     if (!touchStartPos.current) return;
+    if (isPinchingRef.current) {
+      isTouchCancelled.current = true;
+    }
     if (!isTouchCancelled.current) {
       // Finger haven't moved much -> Pure intentional tap!
       e.preventDefault(); // crucial to prevent simulated mouse/pointer events
@@ -207,6 +230,9 @@ export default function SleepGrid({
     }
     touchStartPos.current = null;
     onInteractionEnd?.();
+    if (e.touches.length === 0) {
+      isPinchingRef.current = false;
+    }
   };
 
   const handlePointerDownAction = (e: React.PointerEvent, slotIdx: number, colIdx?: number) => {
@@ -704,6 +730,12 @@ export default function SleepGrid({
                             onPointerDown: () => handlePointerDown(slotIdx),
                             onPointerEnter: () => handlePointerEnter(slotIdx),
                             onTouchStart: (e) => {
+                              if (e.touches.length > 1) {
+                                isTouchCancelled.current = true;
+                                isPinchingRef.current = true;
+                                return;
+                              }
+                              isPinchingRef.current = false;
                               onInteractionStart?.();
                               setIsPointerDown(true);
                               const key = `sleep_${slotIdx}`;
@@ -712,9 +744,18 @@ export default function SleepGrid({
                               onCellTap(slotIdx);
                             },
                             onTouchMove: (e) => {
+                              if (e.touches.length > 1) {
+                                isTouchCancelled.current = true;
+                                isPinchingRef.current = true;
+                                return;
+                              }
                               if (e.cancelable) e.preventDefault();
                             },
                             onTouchEnd: () => {
+                              if (isPinchingRef.current) {
+                                isPinchingRef.current = false;
+                                return;
+                              }
                               handlePointerUp();
                             }
                           } : {
@@ -880,7 +921,6 @@ export default function SleepGrid({
                   </label>
                   <input
                     type="text"
-                    maxLength={8}
                     value={typedName}
                     onChange={(e) => setTypedName(e.target.value)}
                     placeholder="トイレ"
@@ -890,22 +930,24 @@ export default function SleepGrid({
                 </div>
 
                 {/* Custom Category Selection */}
-                <div className="mb-4">
-                  <label className="text-[10px] font-bold text-slate-400 block mb-1.5 uppercase tracking-wide">
-                    カテゴリー分類
-                  </label>
-                  <select
-                    value={typedCategory}
-                    onChange={(e) => setTypedCategory(e.target.value)}
-                    className="w-full border rounded-lg px-2.5 py-1.5 text-xs font-black focus:outline-hidden focus:border-blue-500 border-slate-300 bg-white text-black cursor-pointer"
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!isDefaultColName(typedName) && (
+                  <div className="mb-4">
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1.5 uppercase tracking-wide">
+                      カテゴリー分類
+                    </label>
+                    <select
+                      value={typedCategory}
+                      onChange={(e) => setTypedCategory(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1.5 text-xs font-black focus:outline-hidden focus:border-blue-500 border-slate-300 bg-white text-black cursor-pointer"
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* C. Position Swap (Order preservation) */}
                 <div className={`border-t pt-3.5 mb-4 ${

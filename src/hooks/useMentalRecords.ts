@@ -14,7 +14,8 @@ import {
   loadMentalRowsFromStorage,
   saveMentalRowsToStorage,
   loadMentalCategoriesFromStorage,
-  saveMentalCategoriesToStorage
+  saveMentalCategoriesToStorage,
+  formatDateLabel
 } from '../utils';
 
 export function useMentalRecords(selectedDate: string, showToast: (msg: string) => void) {
@@ -165,10 +166,12 @@ export function useMentalRecords(selectedDate: string, showToast: (msg: string) 
     handleUpdateMentalRows(updated);
   };
 
-  const handleToggleMentalScore = (rowId: string, score: number) => {
+  const handleToggleMentalScore = (rowId: string, score: number | null) => {
     const currentDayRecord = { ...(mentalRecords[selectedDate] || {}) };
     
-    if (currentDayRecord[rowId as any] === score) {
+    if (score === null) {
+      delete currentDayRecord[rowId as any];
+    } else if (currentDayRecord[rowId as any] === score) {
       delete currentDayRecord[rowId as any];
     } else {
       currentDayRecord[rowId as any] = score;
@@ -371,19 +374,31 @@ export function useMentalRecords(selectedDate: string, showToast: (msg: string) 
   };
 
   const handleCopyMentalPreviousDay = () => {
-    const prevDateStr = shiftDateString(selectedDate, -1);
-    const prevRecord = mentalRecords[prevDateStr];
-    
-    if (prevRecord) {
+    let foundRecord = null;
+    let foundDateStr = '';
+
+    // 最大365日前までさかのぼって有効な記録を探します
+    for (let i = 1; i <= 365; i++) {
+      const dateStr = shiftDateString(selectedDate, -i);
+      const record = mentalRecords[dateStr];
+      if (record && Object.keys(record).length > 0) {
+        foundRecord = record;
+        foundDateStr = dateStr;
+        break;
+      }
+    }
+
+    if (foundRecord) {
       const updatedRecords = {
         ...mentalRecords,
-        [selectedDate]: { ...prevRecord },
+        [selectedDate]: { ...foundRecord },
       };
       setMentalRecords(updatedRecords);
       saveMentalRecordsToStorage(updatedRecords);
-      showToast('📋 前日のメンタル記録をコピーしました！');
+      const dateLabel = formatDateLabel(foundDateStr).split(' ')[0];
+      showToast(`📋 ${dateLabel} の記録をコピーしました！`);
     } else {
-      showToast('⚠️ 前日の記録データがありません');
+      showToast('⚠️ 過去にコピーできる記録データがありません');
     }
   };
 
