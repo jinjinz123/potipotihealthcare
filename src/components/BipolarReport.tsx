@@ -22,6 +22,8 @@ interface BipolarReportProps {
   mentalRecords?: DailyRecords;
   selectedDate?: string;
   chartScaleFactor?: number;
+  showToast?: (msg: string) => void;
+  onOpenPdfPreview?: () => void;
 }
 
 interface Point {
@@ -139,7 +141,9 @@ export default function BipolarReport({
   mentalRows: propMentalRows,
   mentalRecords: propMentalRecords,
   selectedDate: propSelectedDate,
-  chartScaleFactor = 0.6
+  chartScaleFactor = 0.6,
+  showToast,
+  onOpenPdfPreview
 }: BipolarReportProps) {
   
   const isDark = displayMode === 'dark';
@@ -497,37 +501,53 @@ export default function BipolarReport({
   return (
     <div className="flex flex-col gap-4 p-3 select-none overflow-y-auto max-w-full pb-8" id="bipolar-report-container">
       
-      {/* A. Month Selector Navigation (Styled exactly like Summary Date Navigator) */}
-      <div className={`p-4 rounded-2xl border ${
-        isDark 
-          ? 'bg-[#211F24] border-[#49454F] text-[#E6E1E5]' 
-          : 'bg-slate-50 border-slate-200 text-slate-800'
-      } flex items-center justify-center gap-6 py-2.5 shadow-xs`} id="report-title-card">
-        <button
-          type="button"
-          onClick={handlePrevMonth}
-          className="p-1.5 rounded-full hover:bg-slate-800 active:scale-95 transition-all text-sky-400 cursor-pointer"
-          aria-label="前の月"
-        >
-          <span className="text-base font-black">◀</span>
-        </button>
-        
-        <span
-          className={`text-[13.5px] sm:text-[15px] font-black tracking-wide cursor-pointer hover:opacity-90 px-3.5 py-1.5 rounded-full transition-all active:scale-95 select-none shadow-xs ${
-            isDark ? 'bg-[#25232A] border border-[#49454F] text-[#e3e2e6]' : 'bg-[#1A2F4C] text-white'
-          }`}
-        >
-          {viewYear}年{viewMonth}月
-        </span>
+      {/* A. Month Selector Navigation with integrated Preview Button */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full justify-start" id="report-header-toolbar">
+        {/* Month Selector Card */}
+        <div className={`flex-1 sm:flex-none sm:w-auto p-4 rounded-2xl border ${
+          isDark 
+            ? 'bg-[#211F24] border-[#49454F] text-[#E6E1E5]' 
+            : 'bg-slate-50 border-slate-200 text-slate-800'
+        } flex items-center justify-center gap-6 py-2.5 shadow-xs`} id="report-title-card">
+          <button
+            type="button"
+            onClick={handlePrevMonth}
+            className="p-1.5 rounded-full hover:bg-slate-800 active:scale-95 transition-all text-sky-400 cursor-pointer"
+            aria-label="前の月"
+          >
+            <span className="text-base font-black">◀</span>
+          </button>
+          
+          <span
+            className={`text-[13.5px] sm:text-[15px] font-black tracking-wide cursor-pointer hover:opacity-90 px-3.5 py-1.5 rounded-full transition-all active:scale-95 select-none shadow-xs ${
+              isDark ? 'bg-[#25232A] border border-[#49454F] text-[#e3e2e6]' : 'bg-[#1A2F4C] text-white'
+            }`}
+          >
+            {viewYear}年{viewMonth}月
+          </span>
 
-        <button
-          type="button"
-          onClick={handleNextMonth}
-          className="p-1.5 rounded-full hover:bg-slate-800 active:scale-95 transition-all text-sky-400 cursor-pointer"
-          aria-label="次の月"
-        >
-          <span className="text-base font-black">▶</span>
-        </button>
+          <button
+            type="button"
+            onClick={handleNextMonth}
+            className="p-1.5 rounded-full hover:bg-slate-800 active:scale-95 transition-all text-sky-400 cursor-pointer"
+            aria-label="次の月"
+          >
+            <span className="text-base font-black">▶</span>
+          </button>
+        </div>
+
+        {/* Vector PDF Preview Button */}
+        {onOpenPdfPreview && (
+          <button
+            type="button"
+            onClick={onOpenPdfPreview}
+            className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-sm font-black bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer shadow-md select-none sm:w-auto w-full shrink-0"
+            title="A4サイズ・ベクター形式のPDF印刷プレビューを表示"
+            id="report-bipolar-pdf-preview-btn"
+          >
+            <span>📄 A4ベクターPDF印刷プレビュー</span>
+          </button>
+        )}
       </div>
 
       {/* B. Core Smooth Line Mood Chart Card */}

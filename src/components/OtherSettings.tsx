@@ -148,6 +148,7 @@ export default function OtherSettings({
   };
 
   const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const isInsideIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   // Google Drive states
   const [gdriveUser, setGdriveUser] = useState<User | null>(null);
@@ -1184,12 +1185,40 @@ export default function OtherSettings({
             </div>
           ) : (
             <div className="space-y-4">
+              {isInsideIframe && (
+                <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs leading-relaxed space-y-3 font-sans text-left">
+                  <div className="flex gap-2 items-center font-bold text-amber-500 text-xs">
+                    <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+                    <span>⚠️ プレビュー環境によるサインイン制限</span>
+                  </div>
+                  <p className="text-slate-400 dark:text-slate-300 text-[11px] leading-relaxed">
+                    現在、AI Studio の開発プレビュー（枠内）で表示しています。ブラウザのセキュリティ制限により、この枠内からの Google サインイン（ポップアップ）は完全にブロックされてしまいます。
+                  </p>
+                  <p className="text-emerald-500 dark:text-emerald-400 font-bold text-[11px]">
+                    ✅ 解決方法：以下のボタンから「別のタブ」で直接アプリを開いてください。セキュリティ制限が解除され、1タップで安全に Google 同期が可能になります！
+                  </p>
+                  <a
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] transition-all text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-md border-b-2 border-amber-700 text-center cursor-pointer"
+                  >
+                    🚀 別タブで直接アプリを開く（安全・推奨）
+                  </a>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleGDriveLogin}
-                disabled={isGDriveLoading}
-                className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all text-[#e3e2e6] rounded-xl text-sm font-black flex items-center justify-center gap-2.5 shadow-sm cursor-pointer h-14"
+                disabled={isGDriveLoading || isInsideIframe}
+                className={`w-full py-4 px-4 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all text-[#e3e2e6] rounded-xl text-sm font-black flex items-center justify-center gap-2.5 shadow-sm cursor-pointer h-14 ${
+                  isInsideIframe 
+                    ? 'bg-slate-800 text-slate-500 border border-slate-700' 
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
                 id="settings-gdrive-login-btn"
+                title={isInsideIframe ? 'プレビュー画面内からは制限されています。別タブから実行してください。' : 'Googleアカウントでサインイン'}
               >
                 {isGDriveLoading ? (
                   <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

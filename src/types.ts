@@ -56,6 +56,11 @@ export interface ReportBlock {
   endCol: number;
   text: string;
   fontSize?: 'sm' | 'md' | 'lg';
+  fontFamily?: string;
+  align?: 'left' | 'center' | 'right';
+  bold?: boolean;
+  type?: 'text' | 'component';
+  componentType?: 'mood' | 'activity' | 'stats';
 }
 
 

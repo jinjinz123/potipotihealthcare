@@ -68,6 +68,8 @@ import SleepViewer from './components/SleepViewer';
 import OtherSettings from './components/OtherSettings';
 import DeveloperTab from './components/DeveloperTab';
 import BlockEditor from './components/BlockEditor';
+import ReportBlockItem from './components/ReportBlockItem';
+import BipolarPdfReport from './components/BipolarPdfReport';
 
 // Import our custom hooks
 import { useSleepRecords } from './hooks/useSleepRecords';
@@ -438,6 +440,47 @@ export default function App() {
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
 
+  // --- Plan B Report States ---
+  const [reportPeriod, setReportPeriod] = useState<'1w' | '1m' | '3m' | '6m' | '1y'>(() => {
+    try {
+      return (localStorage.getItem('pochilog_report_period') as any) || '1m';
+    } catch {
+      return '1m';
+    }
+  });
+
+  const [reportPatientName, setReportPatientName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pochilog_report_patient_name') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [reportDoctorName, setReportDoctorName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pochilog_report_doctor_name') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [reportUserMemo, setReportUserMemo] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pochilog_report_user_memo') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [reportAutoSummaryEnabled, setReportAutoSummaryEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('pochilog_report_auto_summary_enabled') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
   // --- Report Designer Grid, Blocks, and Drag Selection State ---
   const [blocks, setBlocks] = useState<ReportBlock[]>(() => {
     const saved = localStorage.getItem('pochilog_report_blocks');
@@ -456,6 +499,7 @@ export default function App() {
   const [currentCell, setCurrentCell] = useState<{ r: number; c: number } | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [textEditingBlockId, setTextEditingBlockId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getFontSizeClass = (fontSize?: 'sm' | 'md' | 'lg') => {
@@ -464,14 +508,281 @@ export default function App() {
     return 'text-[12px] sm:text-[12px]';
   };
 
+  // --- Plan B Report Persistence ---
+  useEffect(() => {
+    localStorage.setItem('pochilog_report_patient_name', reportPatientName);
+  }, [reportPatientName]);
+
+  useEffect(() => {
+    localStorage.setItem('pochilog_report_doctor_name', reportDoctorName);
+  }, [reportDoctorName]);
+
+  useEffect(() => {
+    localStorage.setItem('pochilog_report_user_memo', reportUserMemo);
+  }, [reportUserMemo]);
+
+  useEffect(() => {
+    localStorage.setItem('pochilog_report_period', reportPeriod);
+  }, [reportPeriod]);
+
+  useEffect(() => {
+    localStorage.setItem('pochilog_report_auto_summary_enabled', String(reportAutoSummaryEnabled));
+  }, [reportAutoSummaryEnabled]);
+
+  // Generate an elegant, compassionate narrative summary in Japanese based on monthly stats.
+  const generateReportSummaryMemo = (
+    avg: number,
+    max: number,
+    min: number,
+    loggedDays: number,
+    stableDays: number,
+    manicDays: number,
+    depressedDays: number,
+    mixedDays: number,
+    viewYear: number,
+    viewMonth: number
+  ): string => {
+    if (loggedDays === 0) {
+      return '期間中の記録がありません。メンタルタブから日々の気分を記録してください。';
+    }
+    
+    let text = `${viewYear}年${viewMonth}月周辺の期間は、合計${loggedDays}日間の気分記録がありました。`;
+    
+    if (avg > 0.5) {
+      text += `平均気分は+${avg.toFixed(1)}と、全体的にやや高揚（軽躁〜躁状態）傾向にありました。`;
+    } else if (avg < -0.5) {
+      text += `平均気分は${avg.toFixed(1)}と、全体的にやや停滞（軽うつ〜うつ状態）が長引いていました。`;
+    } else {
+      text += `平均気分は${avg >= 0 ? '+' : ''}${avg.toFixed(1)}と、全体として比較的安定域（0）に近い平穏な推移でした。`;
+    }
+    
+    if (stableDays > loggedDays * 0.4) {
+      text += `特に、気分の波が安定した日（0）が${stableDays}日間あり、穏やかに過ごせた時間が多い期間でした。`;
+    } else {
+      text += `安定域（0）で過ごせた日は${stableDays}日間であり、気分の起伏や感情の波が生じやすいデリケートな期間でした。`;
+    }
+    
+    text += `気分の最高値は${max > 0 ? '+' : ''}${max}、最低値は${min > 0 ? '+' : ''}${min}（全体の変動幅は${(max - min).toFixed(1)}）でした。`;
+    
+    const details = [];
+    if (manicDays > 0) details.push(`躁・軽躁状態の日が${manicDays}日間`);
+    if (depressedDays > 0) details.push(`うつ・軽うつ状態の日が${depressedDays}日間`);
+    if (mixedDays > 0) details.push(`混合状態（M）の兆候が${mixedDays}日間`);
+    
+    if (details.length > 0) {
+      text += `期間中、${details.join('、')}見られました。`;
+    }
+    
+    if (mixedDays > 0) {
+      text += `混合状態（M）が検知された日は、焦燥感やイライラ、不眠などの衝動性が生じやすいため、無理な活動を避けて静かな環境で心身を休めることを最優先にしてください。`;
+    } else if (depressedDays > manicDays && depressedDays >= 5) {
+      text += `うつの停滞期がやや長めであったため、少しでもできているご自身を褒めつつ、睡眠時間をしっかり確保し、まずは心身の回復を第一にお過ごしください。`;
+    } else if (manicDays > depressedDays && manicDays >= 5) {
+      text += `軽躁の活動期であったため、ペースを意図的に落とし、睡眠不足にならないようコントロールすることを推奨します。`;
+    } else {
+      text += `全体的に安定したバランスを保てておりますので、この良好なペースと治療リズムを継続していきましょう。`;
+    }
+    
+    return text;
+  };
+
+  // Cubic Bezier interpolation with horizontal control tangents
+  function getReportSmoothBezierPath(pts: { x: number; y: number }[]): string {
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      
+      const cpX1 = p0.x + (p1.x - p0.x) / 2;
+      const cpY1 = p0.y;
+      const cpX2 = p0.x + (p1.x - p0.x) / 2;
+      const cpY2 = p1.y;
+      
+      d += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
+    }
+    return d;
+  }
+
+  // --- Plan B Report Data Calculations ---
+  const reportBaseDateParts = selectedDate.split('-');
+  const reportYear = parseInt(reportBaseDateParts[0], 10) || 2026;
+  const reportMonth = parseInt(reportBaseDateParts[1], 10) || 6;
+  const reportDay = parseInt(reportBaseDateParts[2], 10) || 30;
+
+  let reportDaysCount = 30;
+  if (reportPeriod === '1w') reportDaysCount = 7;
+  else if (reportPeriod === '1m') reportDaysCount = 30;
+  else if (reportPeriod === '3m') reportDaysCount = 90;
+  else if (reportPeriod === '6m') reportDaysCount = 180;
+  else if (reportPeriod === '1y') reportDaysCount = 365;
+
+  const reportDaysArray: { dateStr: string; displayLabel: string; rawDay: number; month: number }[] = [];
+  const reportBaseDate = new Date(reportYear, reportMonth - 1, reportDay);
+
+  for (let i = reportDaysCount - 1; i >= 0; i--) {
+    const d = new Date(reportBaseDate);
+    d.setDate(reportBaseDate.getDate() - i);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const dy = d.getDate();
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(dy).padStart(2, '0')}`;
+    
+    reportDaysArray.push({
+      dateStr,
+      displayLabel: `${m}/${dy}`,
+      rawDay: dy,
+      month: m
+    });
+  }
+
+  const reportAutoMixedEnabled = true; // Auto detection mixed state enabled
+  const reportMoodRow = mentalRows?.find(r => r.id === 'mood' || r.name.includes('気分'));
+  const reportMoodRowId = reportMoodRow ? reportMoodRow.id : 'mood';
+  const reportMixedRow = mentalRows?.find(r => r.name.includes('混合状態') || r.id === 'mixed' || r.id === 'mixed_state');
+  const reportMixedRowId = reportMixedRow ? reportMixedRow.id : null;
+  const reportAnxietyRow = mentalRows?.find(r => r.id === 'anxiety' || r.name.includes('不安') || r.name.includes('緊張'));
+  const reportAnxietyRowId = reportAnxietyRow ? reportAnxietyRow.id : 'anxiety';
+  const reportEnergyRow = mentalRows?.find(r => r.id === 'energy' || r.name.includes('エネルギー'));
+  const reportEnergyRowId = reportEnergyRow ? reportEnergyRow.id : 'energy';
+  const reportMotivationRow = mentalRows?.find(r => r.id === 'motivation' || r.name.includes('意欲') || r.name.includes('やる気'));
+  const reportMotivationRowId = reportMotivationRow ? reportMotivationRow.id : 'motivation';
+
+  const reportParsedDays = reportDaysArray.map((dayInfo, index) => {
+    const dayRecord = mentalRecords?.[dayInfo.dateStr];
+    let isMixed = false;
+    let mixedSeverity = 1;
+    let moodVal: number | undefined = undefined;
+
+    if (dayRecord) {
+      const rawMood = dayRecord[reportMoodRowId as any];
+      if (rawMood !== undefined && rawMood !== null && typeof rawMood === 'number') {
+        moodVal = rawMood;
+      }
+      if (reportMixedRowId && dayRecord[reportMixedRowId as any] !== undefined && dayRecord[reportMixedRowId as any] !== null) {
+        const rawVal = Number(dayRecord[reportMixedRowId as any]);
+        if (rawVal >= 1 && rawVal <= 5) {
+          isMixed = true;
+          mixedSeverity = rawVal;
+        }
+      }
+      if (reportAutoMixedEnabled && !isMixed && moodVal !== undefined && moodVal < 0) {
+        const rawEnergy = dayRecord[reportEnergyRowId as any];
+        const rawMot = dayRecord[reportMotivationRowId as any];
+        const rawAnx = dayRecord[reportAnxietyRowId as any];
+
+        const eVal = (rawEnergy !== undefined && rawEnergy !== null && typeof rawEnergy === 'number') ? rawEnergy : 0;
+        const mVal = (rawMot !== undefined && rawMot !== null && typeof rawMot === 'number') ? rawMot : 0;
+        const aVal = (rawAnx !== undefined && rawAnx !== null && typeof rawAnx === 'number') ? rawAnx : 0;
+
+        const isConflict1 = eVal > 0 || mVal > 0;
+        const isConflict2 = aVal >= 3;
+
+        if (isConflict1 || isConflict2) {
+          isMixed = true;
+          if (isConflict1) {
+            const activeVal = Math.max(eVal, mVal);
+            const moodSev = Math.abs(moodVal);
+            const sum = activeVal + moodSev;
+            if (sum >= 9) mixedSeverity = 5;
+            else if (sum >= 7) mixedSeverity = 4;
+            else if (sum >= 5) mixedSeverity = 3;
+            else if (sum >= 3) mixedSeverity = 2;
+            else mixedSeverity = 1;
+          } else {
+            const moodSev = Math.abs(moodVal);
+            const sum = aVal + moodSev;
+            if (sum >= 9) mixedSeverity = 5;
+            else if (sum >= 7) mixedSeverity = 4;
+            else if (sum >= 5) mixedSeverity = 3;
+            else mixedSeverity = 2;
+          }
+        }
+      }
+    }
+
+    return {
+      index,
+      day: dayInfo.rawDay,
+      dateStr: dayInfo.dateStr,
+      displayLabel: dayInfo.displayLabel,
+      month: dayInfo.month,
+      value: moodVal,
+      isMixed,
+      mixedSeverity
+    };
+  });
+
+  const reportRegisteredDays = reportParsedDays.filter(d => d.value !== undefined && d.value !== null) as { index: number; day: number; value: number; isMixed: boolean; mixedSeverity: number }[];
+  const reportLoggedDays = reportRegisteredDays.length;
+  
+  let reportAvg = 0;
+  let reportMax = 0;
+  let reportMin = 0;
+  let reportStableDays = 0;
+  let reportManicDays = 0;
+  let reportDepressedDays = 0;
+  let reportMixedDays = 0;
+
+  if (reportLoggedDays > 0) {
+    const vals = reportRegisteredDays.map(d => d.value);
+    const sum = vals.reduce((a, b) => a + b, 0);
+    reportAvg = sum / reportLoggedDays;
+    reportMax = Math.max(...vals);
+    reportMin = Math.min(...vals);
+    reportStableDays = reportRegisteredDays.filter(d => d.value === 0).length;
+    reportManicDays = reportRegisteredDays.filter(d => d.value > 0).length;
+    reportDepressedDays = reportRegisteredDays.filter(d => d.value < 0).length;
+    reportMixedDays = reportParsedDays.filter(d => d.isMixed).length;
+  }
+
+  const reportRateVal = reportDaysCount > 0 ? Math.round((reportLoggedDays / reportDaysCount) * 100) : 0;
+  const reportStats = {
+    avg: reportAvg,
+    max: reportMax,
+    min: reportMin,
+    range: (reportMax - reportMin).toFixed(1),
+    loggedDays: reportLoggedDays,
+    stableDays: reportStableDays,
+    manicDays: reportManicDays,
+    depressedDays: reportDepressedDays,
+    mixedDays: reportMixedDays,
+    rate: `${reportRateVal}%`,
+    autoSummary: generateReportSummaryMemo(
+      reportAvg,
+      reportMax,
+      reportMin,
+      reportLoggedDays,
+      reportStableDays,
+      reportManicDays,
+      reportDepressedDays,
+      reportMixedDays,
+      reportYear,
+      reportMonth
+    )
+  };
+
+  useEffect(() => {
+    if (reportAutoSummaryEnabled && !reportUserMemo) {
+      setReportUserMemo(reportStats.autoSummary);
+    }
+  }, [reportStats.autoSummary, reportAutoSummaryEnabled]);
+
   // 画面がレポート印刷のデザイン画面以外に切り替わったときに、ドラッグ選択中の破線枠を自動的にリセットする
   useEffect(() => {
     if (gridMode !== 'viewer' || viewerSubScreen !== 'report') {
       setStartCell(null);
       setCurrentCell(null);
       setEditingBlockId(null);
+    } else {
+      // 編集モードに入った時点で何も選択されておらず、ブロックが存在していれば最初のブロックを自動選択
+      if (editingBlockId === null && blocks.length > 0) {
+        setEditingBlockId(blocks[0].id);
+      }
     }
-  }, [gridMode, viewerSubScreen]);
+  }, [gridMode, viewerSubScreen, blocks]);
 
   const handleCreateBlock = () => {
     if (!startCell || !currentCell) {
@@ -500,11 +811,12 @@ export default function App() {
     const newBlocks = [...blocks, newBlock];
     setBlocks(newBlocks);
     localStorage.setItem('pochilog_report_blocks', JSON.stringify(newBlocks));
+    setEditingBlockId(newBlock.id); // 新しく作成したブロックを自動的に選択状態にする
 
     // Clear selection
     setStartCell(null);
     setCurrentCell(null);
-    showToast(`⬜ ブロック ${nextNum} を作成しました！`);
+    showToast(`⬜ ブロック ${nextNum} を作成・選択しました！`);
   };
 
   const handleUpdateBlockText = (id: string, text: string) => {
@@ -684,7 +996,18 @@ export default function App() {
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const pdfFilename = `pochilog_report_${year}${month}${day}_${hours}${minutes}.pdf`;
 
-      doc.save(pdfFilename);
+      // Convert PDF to a standard Blob object to bypass iframe sandbox restrictions
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = pdfFilename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+
       showToast(`📄 PDFファイルを出力しました: ${pdfFilename}`);
     } catch (e) {
       console.error(e);
@@ -1033,20 +1356,28 @@ export default function App() {
     <div className="min-h-screen bg-[#121212] md:py-4 flex justify-center items-center overflow-y-auto font-sans" id="app-root-frame">
       
       <AnimatePresence>
-        {editingBlockId !== null && (() => {
-          const block = blocks.find(b => b.id === editingBlockId);
-          if (!block) return null;
+        {textEditingBlockId !== null && (() => {
+          const block = blocks.find(b => b.id === textEditingBlockId);
+          if (!block || block.type === 'component') return null;
           return (
             <BlockEditor
               blockId={block.id}
               blockNum={block.num}
               initialText={block.text}
-              onSave={(newText) => {
-                handleUpdateBlockText(block.id, newText);
-                setEditingBlockId(null);
-                showToast(`Block ${block.num} を保存しました`);
+              initialFontSize={block.fontSize}
+              initialFontFamily={block.fontFamily}
+              initialAlign={block.align}
+              initialBold={block.bold}
+              onChange={(updates) => {
+                const updated = blocks.map(b => b.id === block.id ? { ...b, ...updates } : b);
+                setBlocks(updated);
+                localStorage.setItem('pochilog_report_blocks', JSON.stringify(updated));
               }}
-              onClose={() => setEditingBlockId(null)}
+              onSave={() => {
+                setTextEditingBlockId(null);
+                showToast(`ブロック ${block.num} を保存しました`);
+              }}
+              onClose={() => setTextEditingBlockId(null)}
             />
           );
         })()}
@@ -1343,150 +1674,21 @@ export default function App() {
                 </button>
               </div>
             ) : gridMode === 'viewer' ? (
-              <div className={`flex items-center select-none ${
-                viewerSubScreen === 'report' 
-                  ? 'flex-1 justify-center sm:justify-end min-w-0 w-full sm:w-auto pl-1 sm:pl-1.5' 
-                  : 'shrink-0 pl-1.5'
-              }`}>
-                {viewerSubScreen === 'report' ? (
-                  <div className="flex items-center gap-1.5 justify-end w-full max-w-full">
-                    
-                    {/* STANDARD TOOLBAR CONTROLS */}
-                    <div className="items-center gap-1 sm:gap-1.5 justify-center sm:justify-end max-w-full w-full flex">
-                      {/* Hidden template load file input */}
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleLoadTemplate}
-                        accept=".json"
-                        className="hidden"
-                      />
-
-                      {/* 元に戻す (Undo) ボタン */}
-                      <button
-                        onClick={handleUndoBlock}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-indigo-500/30 bg-[#252429] text-[#e3e2e6] hover:bg-indigo-900/30 active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="直前の枠作成を元に戻す (↩️)"
-                        id="report-undo-btn"
-                      >
-                        <Undo2 className="h-4 w-4 stroke-[2.5]" />
-                      </button>
-
-                      {/* ズームアウト (Zoom Out) ボタン */}
-                      <button
-                        onClick={() => {
-                          const zoomOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-                          const currentIndex = zoomOptions.indexOf(zoomRate);
-                          if (currentIndex > 0) {
-                            const nextZoom = zoomOptions[currentIndex - 1];
-                            setZoomRate(nextZoom);
-                            localStorage.setItem('pochilog_report_zoom_rate', nextZoom.toString());
-                            showToast(`🔍 ズームアウト: ${nextZoom * 100}%`);
-                          } else {
-                            showToast('これ以上縮小できません (50%)');
-                          }
-                        }}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-[#2d2c30] bg-[#1c1b1f] text-[#e6e1e5] hover:bg-[#2d2c30] active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="縮小 (－)"
-                        id="report-add-hline-btn"
-                      >
-                        <span className="text-sky-400 font-extrabold text-xs sm:text-sm">－</span>
-                      </button>
-
-                      {/* ズーム率表示 */}
-                      <div 
-                        className="flex items-center justify-center h-8 px-1 sm:px-1.5 sm:h-9 border border-[#2d2c30] bg-[#1c1b1f] text-sky-400 rounded-lg text-[9px] sm:text-xs font-mono font-black select-none shadow-sm min-w-[36px] sm:min-w-[48px]"
-                        title={`現在のズーム率: ${zoomRate * 100}%`}
-                      >
-                        {zoomRate * 100}%
-                      </div>
-
-                      {/* ズームイン (Zoom In) ボタン */}
-                      <button
-                        onClick={() => {
-                          const zoomOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-                          const currentIndex = zoomOptions.indexOf(zoomRate);
-                          if (currentIndex < zoomOptions.length - 1) {
-                            const nextZoom = zoomOptions[currentIndex + 1];
-                            setZoomRate(nextZoom);
-                            localStorage.setItem('pochilog_report_zoom_rate', nextZoom.toString());
-                            showToast(`🔍 ズームイン: ${nextZoom * 100}%`);
-                          } else {
-                            showToast('これ以上拡大できません (200%)');
-                          }
-                        }}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-[#2d2c30] bg-[#1c1b1f] text-[#e6e1e5] hover:bg-[#2d2c30] active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="拡大 (＋)"
-                        id="report-add-vline-btn"
-                      >
-                        <span className="text-sky-400 font-extrabold text-xs sm:text-sm">＋</span>
-                      </button>
-
-                      {/* 枠を作成 (Create Block) ボタン */}
-                      <button
-                        onClick={handleCreateBlock}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-emerald-500/30 bg-[#252429] text-emerald-400 hover:bg-emerald-950/30 active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="選択範囲に枠を作成 (⬜)"
-                        id="report-create-block-btn"
-                      >
-                        <span className="text-xs sm:text-sm">⬜</span>
-                      </button>
-
-                      {/* テンプレートを保存 (Save Template) ボタン */}
-                      <button
-                        onClick={handleSaveTemplate}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-[#2d2c30] bg-[#1c1b1f] text-slate-300 hover:bg-[#2d2c30] active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="テンプレートを保存 (💾)"
-                        id="report-save-template-btn"
-                      >
-                        <span className="text-xs sm:text-sm">💾</span>
-                      </button>
-
-                      {/* テンプレートを読み込む (Load Template) ボタン */}
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-[#2d2c30] bg-[#1c1b1f] text-slate-300 hover:bg-[#2d2c30] active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="テンプレートを読み込む (📂)"
-                        id="report-load-template-btn"
-                      >
-                        <span className="text-xs sm:text-sm">📂</span>
-                      </button>
-
-                      {/* PDFとして出力 (Export PDF) ボタン */}
-                      <button
-                        onClick={handleExportPDF}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-[#2d2c30] bg-[#1c1b1f] text-amber-400 hover:bg-[#2d2c30] active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="A4サイズPDFとして出力 (📄)"
-                        id="report-export-pdf-btn"
-                      >
-                        <span className="text-xs sm:text-sm">📄</span>
-                      </button>
-
-                      {/* プレビュー表示ボタン */}
-                      <button
-                        onClick={() => {
-                          setViewerSubScreen('report_preview');
-                          showToast('👁️ プレビュー画面を表示しました');
-                        }}
-                        className="flex items-center gap-1 px-2 py-1.5 sm:px-2.5 h-8 sm:h-9 rounded-lg text-[10px] sm:text-xs font-black bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="プレビューを表示 (👁️)"
-                        id="report-preview-btn"
-                      >
-                        <span>👁️</span>
-                      </button>
-
-                      {/* クリア (Clear) ボタン */}
-                      <button
-                        onClick={handleClearAllBlocks}
-                        className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg border border-[#2d2c30] bg-[#1c1b1f] text-slate-300 hover:bg-[#2d2c30] active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="すべての枠線をクリア (🧹)"
-                        id="report-clear-btn"
-                      >
-                        <span className="text-xs sm:text-sm">🧹</span>
-                      </button>
-                    </div>
-
-                  </div>
+              <div className="shrink-0 pl-1.5">
+                {viewerSubScreen === 'report_preview' ? (
+                  <button
+                    onClick={() => {
+                      setViewerSubScreen('report');
+                      showToast('デザイン編集に戻りました');
+                    }}
+                    className={`flex items-center gap-1 cursor-pointer transition-all px-3 py-1 active:scale-95 text-[#e3e2e6] font-black text-xs h-9 rounded-xl shadow-xs ${
+                      displayMode === 'dark' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-750'
+                    }`}
+                    id="back-to-report-design-btn"
+                  >
+                    <ArrowLeft className="h-4 w-4 stroke-[2.5]" />
+                    <span>編集に戻る</span>
+                  </button>
                 ) : (
                   <div className="w-9 h-9" />
                 )}
@@ -1499,6 +1701,215 @@ export default function App() {
         <main className={`flex-1 flex flex-col min-h-0 relative overflow-hidden transition-colors duration-300 ${
           displayMode === 'dark' ? 'bg-[#121212]' : 'bg-[#f8f9fa]'
         }`} id="main-content-window">
+          
+          {/* レポートデザイン編集専用の固定サブヘッダー（操作パネル）を追加 */}
+          {gridMode === 'viewer' && viewerSubScreen === 'report' && (
+            <div className="bg-[#1c1b1f] border-b border-[#2d2c30] px-4 py-3 flex flex-col gap-3 shrink-0 select-none text-[#e6e1e5]" id="report-designer-sub-header">
+              {/* 1行目: ブロック選択情報 & 形式切り替えドロップダウン */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                {editingBlockId !== null ? (() => {
+                  const activeBlock = blocks.find(b => b.id === editingBlockId);
+                  if (!activeBlock) return null;
+                  return (
+                    <div className="flex items-center gap-2 bg-[#2d2c30] px-3 py-1.5 rounded-xl border border-orange-500/50 shadow-sm" id="sub-selected-block-toolbar">
+                      <span className="text-xs font-black text-orange-400">選択中 (Block {activeBlock.num}):</span>
+                      
+                      <select
+                        value={activeBlock.type || 'text'}
+                        onChange={(e) => {
+                          const newType = e.target.value as 'text' | 'component';
+                          const updated = blocks.map(b => 
+                            b.id === activeBlock.id 
+                              ? { 
+                                  ...b, 
+                                  type: newType, 
+                                  componentType: newType === 'component' ? 'mood' : undefined 
+                                } 
+                              : b
+                          );
+                          setBlocks(updated);
+                          localStorage.setItem('pochilog_report_blocks', JSON.stringify(updated));
+                        }}
+                        className="bg-[#1c1b1f] text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 border border-[#49454f] focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                        title="コンテンツ形式を選択"
+                        id="selected-block-type-select-sub"
+                      >
+                        <option value="text">✍️ テキスト入力</option>
+                        <option value="component">📊 グラフ・データの埋め込み</option>
+                      </select>
+
+                      {activeBlock.type === 'component' && (
+                        <select
+                          value={activeBlock.componentType || 'mood'}
+                          onChange={(e) => {
+                            const newCompType = e.target.value as 'mood' | 'activity' | 'stats';
+                            const updated = blocks.map(b => 
+                              b.id === activeBlock.id ? { ...b, componentType: newCompType } : b
+                            );
+                            setBlocks(updated);
+                            localStorage.setItem('pochilog_report_blocks', JSON.stringify(updated));
+                          }}
+                          className="bg-[#1c1b1f] text-yellow-400 text-xs font-black rounded-lg px-2.5 py-1.5 border border-[#49454f] focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                          title="埋め込むレポートコンポーネントを選択"
+                          id="selected-block-component-type-select-sub"
+                        >
+                          <option value="mood">📈 気分変動推移グラフ</option>
+                          <option value="activity">⚡ 活動エネルギーグラフ</option>
+                          <option value="stats">📋 臨床用統計データ表</option>
+                        </select>
+                      )}
+
+                      {activeBlock.type !== 'component' && (
+                        <>
+                          <button
+                            onClick={() => setTextEditingBlockId(activeBlock.id)}
+                            className="bg-orange-600 hover:bg-orange-700 active:scale-95 text-white text-xs font-black rounded-lg px-3 py-1.5 border border-orange-500/30 transition-all cursor-pointer shadow-sm flex items-center gap-1"
+                            title="テキスト編集画面を開く"
+                            id="selected-block-text-edit-btn-sub"
+                          >
+                            <span>✏️ 文字を入力</span>
+                          </button>
+
+                          <select
+                            value={activeBlock.fontSize || 'sm'}
+                            onChange={(e) => {
+                              handleUpdateBlockFontSize(activeBlock.id, e.target.value as 'sm' | 'md' | 'lg');
+                              showToast(`Block ${activeBlock.num} の文字サイズを ${e.target.value === 'lg' ? '大' : e.target.value === 'md' ? '中' : '小'} に変更しました`);
+                            }}
+                            className="bg-[#1c1b1f] text-indigo-300 text-xs font-bold rounded-lg px-2.5 py-1.5 border border-[#49454f] focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                            title="文字サイズを選択"
+                            id="selected-block-fontsize-select-sub"
+                          >
+                            <option value="sm">🆎 小 (12px)</option>
+                            <option value="md">🆎 中 (16px)</option>
+                            <option value="lg">🆎 大 (24px)</option>
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  <div className="flex items-center gap-2 bg-[#211f24] px-3.5 py-2 rounded-xl border border-dashed border-slate-700 text-slate-400 text-xs font-bold select-none">
+                    💡 枠をクリックして選択すると、文字入力やグラフの埋め込みが設定できます。
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    setViewerSubScreen('report_preview');
+                    showToast('👁️ プレビュー画面を表示しました');
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all cursor-pointer shadow-sm ml-auto"
+                  title="完成イメージをプレビュー"
+                >
+                  <span>👁️ プレビュー表示</span>
+                </button>
+              </div>
+
+              {/* 2行目: ツールバーコントロールボタン群 */}
+              <div className="flex items-center justify-between border-t border-[#2d2c30] pt-2.5 flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={handleCreateBlock}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-950/40 active:scale-95 transition-all cursor-pointer text-xs font-black shadow-sm"
+                    title="ドラッグで選択した範囲に新しい枠を作成"
+                  >
+                    <span>⬜ 枠を作成</span>
+                  </button>
+
+                  <button
+                    onClick={handleUndoBlock}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-indigo-500/30 bg-[#252429] text-[#e3e2e6] hover:bg-indigo-900/20 active:scale-95 transition-all cursor-pointer text-xs font-black shadow-sm"
+                    title="直前の枠作成を元に戻す"
+                  >
+                    <Undo2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                    <span>元に戻す</span>
+                  </button>
+
+                  <button
+                    onClick={handleClearAllBlocks}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-955/10 text-rose-400 hover:bg-rose-955/20 active:scale-95 transition-all cursor-pointer text-xs font-black shadow-sm"
+                    title="すべての枠を削除して白紙に戻す"
+                  >
+                    <span>🧹 白紙に戻す</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1 bg-[#252429] p-0.5 rounded-xl border border-[#2d2c30]">
+                  <button
+                    onClick={() => {
+                      const zoomOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+                      const currentIndex = zoomOptions.indexOf(zoomRate);
+                      if (currentIndex > 0) {
+                        const nextZoom = zoomOptions[currentIndex - 1];
+                        setZoomRate(nextZoom);
+                        localStorage.setItem('pochilog_report_zoom_rate', nextZoom.toString());
+                        showToast(`🔍 ズームアウト: ${nextZoom * 100}%`);
+                      } else {
+                        showToast('これ以上縮小できません (50%)');
+                      }
+                    }}
+                    className="flex items-center justify-center h-7 w-7 rounded-lg text-sky-400 hover:bg-[#2d2c30] active:scale-90 transition-all cursor-pointer"
+                    title="縮小"
+                  >
+                    <span className="font-extrabold text-sm">－</span>
+                  </button>
+                  <div className="px-2 text-[11px] font-mono font-black text-sky-400 select-none text-center min-w-[42px]">
+                    {zoomRate * 100}%
+                  </div>
+                  <button
+                    onClick={() => {
+                      const zoomOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+                      const currentIndex = zoomOptions.indexOf(zoomRate);
+                      if (currentIndex < zoomOptions.length - 1) {
+                        const nextZoom = zoomOptions[currentIndex + 1];
+                        setZoomRate(nextZoom);
+                        localStorage.setItem('pochilog_report_zoom_rate', nextZoom.toString());
+                        showToast(`🔍 ズームイン: ${nextZoom * 100}%`);
+                      } else {
+                        showToast('これ以上拡大できません (200%)');
+                      }
+                    }}
+                    className="flex items-center justify-center h-7 w-7 rounded-lg text-sky-400 hover:bg-[#2d2c30] active:scale-90 transition-all cursor-pointer"
+                    title="拡大"
+                  >
+                    <span className="font-extrabold text-sm">＋</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={handleSaveTemplate}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700 bg-[#2d2c30] text-slate-300 hover:bg-[#3d3c40] hover:text-white active:scale-95 transition-all cursor-pointer text-xs font-bold shadow-sm"
+                    title="現在の枠レイアウトをファイルに保存"
+                  >
+                    <span>💾 保存</span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleLoadTemplate}
+                    style={{ display: 'none' }}
+                    accept=".json"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700 bg-[#2d2c30] text-slate-300 hover:bg-[#3d3c40] hover:text-white active:scale-95 transition-all cursor-pointer text-xs font-bold shadow-sm"
+                    title="ファイルから枠レイアウトを読み込む"
+                  >
+                    <span>📂 読込</span>
+                  </button>
+                  <button
+                    onClick={handleExportPDF}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-955/20 text-amber-400 hover:bg-amber-955/40 active:scale-95 transition-all cursor-pointer text-xs font-black shadow-sm"
+                    title="A4サイズのPDFファイルを生成"
+                  >
+                    <span>📄 PDF出力</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === 'record' && (
             gridMode === 'settings' ? (
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden" id="settings-full-width-container">
@@ -1695,31 +2106,10 @@ export default function App() {
                       <span className="text-slate-550 font-bold group-hover:translate-x-1 transition-transform">▶</span>
                     </button>
 
-                    {/* Option 3: Spreadsheet Test */}
-                    <button
-                      onClick={() => {
-                        setShowSpreadsheetModal(true);
-                        setSpreadsheetTestResult(null);
-                        showToast('📊 スプレッドシートテスト画面を開きました');
-                      }}
-                      className="w-full flex items-center justify-between p-5 rounded-2xl bg-[#1C1B1F] hover:bg-[#252429] active:scale-[0.98] transition-all border border-[#2d2c30] text-left cursor-pointer group shadow-md"
-                    >
-                      <div className="flex items-center gap-4 font-sans">
-                        <div className="h-12 w-12 rounded-xl bg-emerald-950/50 border border-emerald-800/80 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
-                          <FileSpreadsheet className="h-6 w-6 stroke-[2]" />
-                        </div>
-                        <div>
-                          <h3 className="font-extrabold text-sm sm:text-base text-slate-100 group-hover:text-[#e3e2e6] transition-colors">スプレッドシートテスト</h3>
-                          <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">自動転記テストを実行し、テスト用Pythonコードを表示します</p>
-                        </div>
-                      </div>
-                      <span className="text-emerald-550 font-bold group-hover:translate-x-1 transition-transform">▶</span>
-                    </button>
-
                   </div>
 
                   {/* Aesthetic footnote */}
-                  <div className="text-center mt-6 text-[10px] text-slate-500 font-mono">
+                  <div className="text-center mt-6 text-[10px] text-slate-550 font-mono">
                     生活記録ポチログ v1 • Print Preparation Mode
                   </div>
                 </div>
@@ -1746,34 +2136,23 @@ export default function App() {
                   mentalRows={mentalRows}
                   mentalRecords={mentalRecords}
                   chartScaleFactor={chartScaleFactor}
+                  showToast={showToast}
                 />
               </div>
-            ) : (gridMode === 'viewer' && (viewerSubScreen === 'report' || viewerSubScreen === 'report_preview')) ? (
+            ) : (gridMode === 'viewer' && viewerSubScreen === 'report') ? (
               <div 
                 ref={reportContainerRef}
                 className="flex-1 flex flex-col min-h-0 bg-[#121212] overflow-y-auto overflow-x-auto p-4 sm:p-6 select-none" 
                 id="report-view-container"
               >
                 <div className="flex-1 flex flex-col items-center justify-start py-4">
-                  
-                  {/* Mode Indicator Banner */}
-                  {viewerSubScreen === 'report_preview' && (
-                    <div className="mb-4 text-center">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-950/80 text-indigo-300 border border-indigo-800">
-                        📄 印刷プレビューモード
-                      </span>
-                      <p className="text-[11px] text-slate-400 mt-2">
-                        ヘッダー左上の「◀」ボタンを押すと、デザイン画面に戻って線の調整を再開できます。
-                      </p>
-                    </div>
-                  )}
 
                   {/* A4 Paper Sheet representation */}
                   <div 
                     className="shrink-0 bg-white shadow-[0_16px_40px_rgba(0,0,0,0.75)] border border-slate-200 flex flex-col relative text-slate-800 animate-in fade-in zoom-in-95 duration-200" 
                     id="report-paper-sheet"
                     style={{
-                      transform: viewerSubScreen === 'report' ? `scale(${zoomRate})` : 'scale(1)',
+                      transform: `scale(${zoomRate})`,
                       transformOrigin: 'top center',
                       transition: 'transform 0.15s ease-out',
                       width: '780px',
@@ -1781,113 +2160,45 @@ export default function App() {
                     }}
                   >
                     {/* Design Edit Mode Badge pinned precisely at the top-right corner with 0 margin */}
-                    {viewerSubScreen === 'report' && (
-                      <div className="absolute top-0 right-0 bg-slate-900 text-[#e6e1e5] border-b border-l border-indigo-500/20 rounded-bl-xl px-3 py-1.5 text-[10px] font-black z-30 flex items-center gap-1 shadow-md select-none">
-                        <span>🛠️</span>
-                        <span>デザイン編集モード</span>
-                      </div>
-                    )}
+                    <div className="absolute top-0 right-0 bg-slate-900 text-[#e6e1e5] border-b border-l border-indigo-500/20 rounded-bl-xl px-3 py-1.5 text-[10px] font-black z-30 flex items-center gap-1 shadow-md select-none">
+                      <span>🛠️</span>
+                      <span>デザイン編集モード</span>
+                    </div>
 
                     {/* Grid Editor Base */}
                     <div 
-                      onPointerDown={viewerSubScreen === 'report' ? handleGridPointerDown : undefined}
-                      onPointerMove={viewerSubScreen === 'report' ? handleGridPointerMove : undefined}
-                      onPointerUp={viewerSubScreen === 'report' ? handleGridPointerUp : undefined}
-                      className={`w-full h-full relative select-none ${
-                        viewerSubScreen === 'report' ? 'overflow-visible cursor-crosshair' : 'overflow-hidden'
-                      }`}
+                      onPointerDown={handleGridPointerDown}
+                      onPointerMove={handleGridPointerMove}
+                      onPointerUp={handleGridPointerUp}
+                      className="w-full h-full relative select-none overflow-visible cursor-crosshair"
                       style={{
                         touchAction: 'none',
                         backgroundSize: '20px 20px',
-                        backgroundImage: viewerSubScreen === 'report' 
-                          ? 'linear-gradient(to right, #cbd5e1 1px, transparent 1px), linear-gradient(to bottom, #cbd5e1 1px, transparent 1px)' 
-                          : 'none',
+                        backgroundImage: 'linear-gradient(to right, #cbd5e1 1px, transparent 1px), linear-gradient(to bottom, #cbd5e1 1px, transparent 1px)',
                         backgroundColor: '#ffffff'
                       }}
                     >
                       {/* Render All Report Blocks */}
                       {blocks.map((block) => (
-                        <div 
+                        <ReportBlockItem
                           key={block.id}
-                          className={`absolute border-2 ${
-                            editingBlockId === block.id
-                              ? 'border-orange-500 bg-orange-50/60 ring-2 ring-orange-500/20 shadow-md'
-                              : viewerSubScreen === 'report'
-                                ? 'border-[#FF8C00] hover:border-orange-600 bg-white/85 hover:bg-white hover:shadow-md'
-                                : 'border-slate-800 hover:border-indigo-600 bg-white hover:shadow-md'
-                          } flex flex-col p-1 group transition-all`}
-                          style={{
-                            left: `${block.startCol * 20}px`,
-                            top: `${block.startRow * 20}px`,
-                            width: `${(block.endCol - block.startCol + 1) * 20}px`,
-                            height: `${(block.endRow - block.startRow + 1) * 20}px`,
-                            zIndex: 10
-                          }}
-                          onPointerDown={(e) => {
-                            // Stop propagation of pointer down events to prevent parent drag selection from starting
-                            e.stopPropagation();
-                          }}
-                          onMouseDown={(e) => {
-                            // Also stop mouse down events just in case
-                            e.stopPropagation();
-                          }}
-                        >
-                          {/* Label and delete button positioned OUTSIDE above the top edge */}
-                          {viewerSubScreen === 'report' && (
-                            <div 
-                              className="absolute bottom-full left-0 right-0 flex justify-between items-end pb-1 pointer-events-none"
-                              style={{ zIndex: 9999 }}
-                            >
-                              <span className={`font-bold px-1.5 py-0.5 rounded border shadow-xs leading-none text-[10px] pointer-events-auto select-none whitespace-nowrap ${
-                                editingBlockId === block.id
-                                  ? 'bg-orange-600 text-white border-orange-500'
-                                  : 'bg-white text-orange-600 border-orange-200'
-                              }`}>
-                                Block {block.num}
-                              </span>
-                              <button
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                }}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  handleDeleteBlock(block.id);
-                                }}
-                                className="text-rose-600 bg-white hover:text-rose-800 hover:bg-rose-50 border border-rose-200 rounded leading-none transition-all cursor-pointer font-bold flex items-center justify-center w-5 h-5 text-xs pointer-events-auto select-none shadow-xs"
-                                title="この枠を削除"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          )}
-                          
-                          {/* Text display mode (centered horizontally and vertically, wrap words, dynamic font size) */}
-                          <div 
-                            onClick={(e) => {
-                              if (viewerSubScreen === 'report') {
-                                e.stopPropagation();
-                                setEditingBlockId(block.id);
-                              }
-                            }}
-                            className={`w-full h-full text-slate-900 font-sans p-1.5 leading-normal whitespace-pre-wrap overflow-y-auto break-words flex flex-col justify-center items-center text-center ${
-                              viewerSubScreen === 'report' ? 'cursor-pointer hover:bg-slate-100/40 rounded transition-colors' : ''
-                            }`}
-                          >
-                            <div className={`w-full font-medium text-center ${getFontSizeClass(block.fontSize)}`}>
-                              {block.text || (
-                                viewerSubScreen === 'report' ? (
-                                  <span className="text-slate-400 italic text-[10px] block text-center">クリックして入力</span>
-                                ) : (
-                                  ''
-                                )
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                          block={block}
+                          blocks={blocks}
+                          editingBlockId={editingBlockId}
+                          viewerSubScreen={viewerSubScreen}
+                          zoomRate={zoomRate}
+                          setEditingBlockId={setEditingBlockId}
+                          setTextEditingBlockId={setTextEditingBlockId}
+                          onDeleteBlock={handleDeleteBlock}
+                          setBlocks={setBlocks}
+                          setUndoStackBlocks={setUndoStackBlocks}
+                          records={records}
+                          actualSleepRecords={actualSleepRecords}
+                          mentalRecords={mentalRecords}
+                          mentalRows={mentalRows}
+                          actualSleepStamps={actualSleepStamps}
+                          selectedDate={selectedDate}
+                        />
                       ))}
 
                       {/* Active drag-selection rectangle helper overlay */}
@@ -1909,6 +2220,27 @@ export default function App() {
                   </div>
 
                 </div>
+              </div>
+            ) : (gridMode === 'viewer' && viewerSubScreen === 'report_preview') ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-y-auto" id="report-preview-container">
+                <BipolarPdfReport
+                  displayMode={displayMode === 'dark' ? 'dark' : 'vivid'}
+                  mentalRows={mentalRows}
+                  mentalRecords={mentalRecords}
+                  selectedDate={selectedDate}
+                  chartScaleFactor={chartScaleFactor}
+                  showToast={showToast}
+                  onBack={() => {
+                    setViewerSubScreen('report');
+                    showToast('🛠️ デザイン編集モードに戻りました');
+                  }}
+                  isManualMode={true}
+                  manualBlocks={blocks}
+                  records={records}
+                  actualSleepRecords={actualSleepRecords}
+                  actualSleepStamps={actualSleepStamps}
+                  transitionSource="editor"
+                />
               </div>
             ) : gridMode === 'mental' ? (
               <div className={`flex-1 flex flex-row min-h-0 divide-x transition-colors duration-300 ${

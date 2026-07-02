@@ -19,6 +19,7 @@ import {
   Folder 
 } from 'lucide-react';
 import BipolarReport from './BipolarReport';
+import BipolarPdfReport from './BipolarPdfReport';
 
 interface SleepViewerProps {
   records: DailyRecords;
@@ -37,6 +38,7 @@ interface SleepViewerProps {
   mentalRows?: MentalRow[];
   mentalRecords?: DailyRecords;
   chartScaleFactor?: number;
+  showToast?: (msg: string) => void;
 }
 
 const isDefaultColName = (name: string): boolean => {
@@ -224,7 +226,8 @@ export default function SleepViewer({
   customColCategories,
   mentalRows,
   mentalRecords,
-  chartScaleFactor
+  chartScaleFactor,
+  showToast
 }: SleepViewerProps) {
   // Use persistent viewMode (defaults to month)
   const [viewMode, setViewMode] = useState<'week' | 'month'>(() => {
@@ -237,9 +240,12 @@ export default function SleepViewer({
     return (saved === 'all' || saved === 'sleep' || saved === 'activity' || saved === 'summary' || saved === 'report') ? saved : 'all';
   });
 
+  const [bipolarPdfPreview, setBipolarPdfPreview] = useState<boolean>(false);
+
   const handleSetActiveTab = (tab: 'all' | 'sleep' | 'activity' | 'summary' | 'report') => {
     setActiveTab(tab);
     localStorage.setItem('viewer_active_tab', tab);
+    setBipolarPdfPreview(false);
   };
 
   const handleSetViewMode = (mode: 'week' | 'month') => {
@@ -506,13 +512,27 @@ export default function SleepViewer({
         id="viewer-rows-container"
       >
         {activeTab === 'report' ? (
-          <BipolarReport 
-            displayMode={displayMode} 
-            mentalRows={mentalRows} 
-            mentalRecords={mentalRecords} 
-            selectedDate={selectedDate}
-            chartScaleFactor={chartScaleFactor}
-          />
+          bipolarPdfPreview ? (
+            <BipolarPdfReport 
+              displayMode={displayMode} 
+              mentalRows={mentalRows} 
+              mentalRecords={mentalRecords} 
+              selectedDate={selectedDate}
+              chartScaleFactor={chartScaleFactor}
+              showToast={showToast}
+              onBack={() => setBipolarPdfPreview(false)}
+            />
+          ) : (
+            <BipolarReport 
+              displayMode={displayMode} 
+              mentalRows={mentalRows} 
+              mentalRecords={mentalRecords} 
+              selectedDate={selectedDate}
+              chartScaleFactor={chartScaleFactor}
+              showToast={showToast}
+              onOpenPdfPreview={() => setBipolarPdfPreview(true)}
+            />
+          )
         ) : activeTab === 'summary' ? (
           <div className="p-4 space-y-6" id="summary-content">
             {categories.map((cat) => {
